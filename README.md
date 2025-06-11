@@ -53,7 +53,7 @@ buttons let you move the on-screen focus without using a mouse and the new
 The TV guide now includes a small panel in the top-right corner showing the
 current system time and local weather when internet access is available. Click
 the panel or the `refresh` link to update the information or view the day's
-forecast.
+forecast. Use the **Settings** menu to set your preferred weather location.
 
 ## Troubleshooting
 

@@ -1025,7 +1025,14 @@ class SettingsDialog(QDialog):
         web_layout.addRow("Web Remote Port:", self.web_port)
         
         layout.addWidget(web_group)
-        
+
+        # Weather Settings
+        weather_group = QGroupBox("[WEATHER] Forecast")
+        weather_layout = QFormLayout(weather_group)
+        self.weather_loc = QLineEdit(s.get("weather_location", "Norfolk"))
+        weather_layout.addRow("Location:", self.weather_loc)
+        layout.addWidget(weather_group)
+
         # Advanced Settings Group
         advanced_group = QGroupBox("[ADV] Advanced")
         advanced_layout = QFormLayout(advanced_group)
@@ -1099,6 +1106,7 @@ class SettingsDialog(QDialog):
             "min_show_minutes": self.min_show_len.value(),
             "ad_break_minutes": self.ad_break_len.value(),
             "web_port": self.web_port.value(),
+            "weather_location": self.weather_loc.text(),
             "cache_file": self.cache_edit.text(),
             "hotkey_file": self.hotkey_edit.text(),
             "channels_dir": self.channels_edit.text()
@@ -2505,7 +2513,26 @@ class GuideWidget(QWidget):
         menu = QMenu(self)
 
         if 'channel' in data:
-            menu.addAction("[TV] Jump to Channel", lambda: self._jump_to_channel(data['channel']))
+            channel = data['channel']
+            menu.addAction("[TV] Jump to Channel", lambda: self._jump_to_channel(channel))
+
+            use_all = self.tv.settings.get("use_all_commercials_channels", [])
+            all_ads = menu.addAction("[ALL ADS] Use All Commercials")
+            all_ads.setCheckable(True)
+            all_ads.setChecked(channel.name in use_all)
+
+            def toggle_all_ads(checked, ch=channel):
+                lst = self.tv.settings.get("use_all_commercials_channels", [])
+                if checked and ch.name not in lst:
+                    lst.append(ch.name)
+                elif not checked and ch.name in lst:
+                    lst.remove(ch.name)
+                self.tv.settings["use_all_commercials_channels"] = lst
+                self.tv._save_settings()
+                self.tv.schedules[ch] = self.tv._build_tv_schedule(ch)
+                self.refresh()
+
+            all_ads.toggled.connect(toggle_all_ads)
         elif not data.get('is_ad'):
             jump_action = menu.addAction("[TV] Jump to Show")
             jump_action.triggered.connect(lambda: self._jump_to_show(data))
@@ -2606,7 +2633,8 @@ class GuideWidget(QWidget):
             return
         try:
             import requests
-            res = requests.get('https://wttr.in/?format=j1', timeout=5)
+            loc = self.tv.settings.get('weather_location', 'Norfolk')
+            res = requests.get(f'https://wttr.in/{loc}?format=j1', timeout=5)
             data = res.json()
             cur = data['current_condition'][0]
             temp = cur['temp_C']
@@ -3106,6 +3134,7 @@ class TVPlayer(QMainWindow):
         "web_port": 5050,
         "cache_file": str(DEFAULT_CACHE_FILE),
         "hotkey_file": str(DEFAULT_HOTKEY_FILE),
+        "weather_location": "Norfolk",
         "load_last_folder": True,
         "recent_channels": "[]",
         "use_all_commercials_channels": "[]"
