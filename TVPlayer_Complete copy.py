@@ -1524,7 +1524,23 @@ class NetworkEditor(QMainWindow):
         # File operations
         menu.addAction("[OPEN] Open Folder", lambda: self._open_in_file_manager(channel))
         menu.addAction("[REN] Rename", lambda: self.rename_channel(channel))
-        
+
+        use_all = self.tv.settings.get("use_all_commercials_channels", [])
+        use_all_action = menu.addAction("[ALL ADS] Use All Commercials")
+        use_all_action.setCheckable(True)
+        use_all_action.setChecked(channel.name in use_all)
+        def toggle_all_ads(checked, ch=channel):
+            lst = self.tv.settings.get("use_all_commercials_channels", [])
+            if checked and ch.name not in lst:
+                lst.append(ch.name)
+            elif not checked and ch.name in lst:
+                lst.remove(ch.name)
+            self.tv.settings["use_all_commercials_channels"] = lst
+            self.tv._save_settings()
+            if ch in self.tv.schedules:
+                self.tv.schedules[ch] = self.tv._build_tv_schedule(ch)
+        use_all_action.toggled.connect(toggle_all_ads)
+
         menu.addSeparator()
         menu.addAction("[DEL] Delete Channel", lambda: self.delete_channel(channel))
         
@@ -2147,17 +2163,17 @@ class GuideWidget(QWidget):
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
 
-        header = QHBoxLayout()
-        header.addStretch()
         self.remote_label = QLabel("REMOTE: ?")
         self.net_label = QLabel("NET: ?")
-        header.addWidget(self.remote_label)
-        header.addWidget(self.net_label)
-        # panel showing system time and weather
+
         self.info_box = QGroupBox()
         info_layout = QVBoxLayout(self.info_box)
         info_layout.setContentsMargins(5, 5, 5, 5)
         info_layout.setSpacing(2)
+        top_row = QHBoxLayout()
+        top_row.addWidget(self.remote_label)
+        top_row.addWidget(self.net_label)
+        info_layout.addLayout(top_row)
         self.time_label = QLabel()
         self.weather_label = QLabel("Weather: ...")
         self.refresh_label = QLabel("<u>refresh</u>")
@@ -2167,8 +2183,6 @@ class GuideWidget(QWidget):
         info_layout.addWidget(self.weather_label, alignment=Qt.AlignCenter)
         info_layout.addWidget(self.refresh_label, alignment=Qt.AlignRight)
         self.info_box.mousePressEvent = lambda e: self.show_weather_dialog()
-        header.addWidget(self.info_box)
-        main_layout.addLayout(header)
         
         # WIP Panel - Enhanced version
         wip_panel = QGroupBox("[NEXT] Upcoming Shows")
@@ -2177,7 +2191,11 @@ class GuideWidget(QWidget):
         self.upcoming_label.setStyleSheet("color: #00ff00; font-size: 12px; padding: 5px; line-height: 1.5;")
         self.upcoming_label.setWordWrap(True)
         wip_layout.addWidget(self.upcoming_label)
-        main_layout.addWidget(wip_panel)
+
+        row = QHBoxLayout()
+        row.addWidget(wip_panel, 1)
+        row.addWidget(self.info_box)
+        main_layout.addLayout(row)
         
         # Create table
         self.table = QTableWidget(0, self.TOTAL_SLOTS + 1)
@@ -3089,7 +3107,8 @@ class TVPlayer(QMainWindow):
         "cache_file": str(DEFAULT_CACHE_FILE),
         "hotkey_file": str(DEFAULT_HOTKEY_FILE),
         "load_last_folder": True,
-        "recent_channels": "[]"
+        "recent_channels": "[]",
+        "use_all_commercials_channels": "[]"
     }
 
     def __init__(self):
@@ -3525,7 +3544,12 @@ class TVPlayer(QMainWindow):
     def _build_tv_schedule(self, channel: Path) -> List[Tuple[datetime, str, int, bool]]:
         """Build a TV schedule for a channel - plays videos in order, synchronized across channels."""
         shows = list(gather_files(channel / "Shows"))
-        ads = list(gather_files(channel / "Commercials"))
+        if channel.name in self.settings.get("use_all_commercials_channels", []):
+            ads = []
+            for ch in self.channels_real:
+                ads.extend(gather_files(ch / "Commercials"))
+        else:
+            ads = list(gather_files(channel / "Commercials"))
 
         # Shuffle content so each schedule rebuild is unique and not identical
         # to the previous shuffle for this channel
@@ -4103,7 +4127,7 @@ class TVPlayer(QMainWindow):
                 result[key] = str(value).lower() == 'true'
             elif isinstance(default, int):
                 result[key] = int(value)
-            elif key == "recent_channels":
+            elif key in ("recent_channels", "use_all_commercials_channels"):
                 try:
                     result[key] = json.loads(str(value))
                 except Exception:
@@ -4117,7 +4141,7 @@ class TVPlayer(QMainWindow):
         """Save application settings."""
         settings = QSettings("TVStation", "LiveTV")
         for key, value in self.settings.items():
-            if key == "recent_channels":
+            if key in ("recent_channels", "use_all_commercials_channels"):
                 settings.setValue(key, json.dumps(value))
             else:
                 settings.setValue(key, str(value) if not isinstance(value, bool) else value)
