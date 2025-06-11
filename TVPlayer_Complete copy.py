@@ -3946,19 +3946,30 @@ class TVPlayer(QMainWindow):
             self._update_info_display()
 
     def _show_ondemand(self):
-        """FIXED: Show the OnDemand channel - stop current playback when revisited."""
-        # If we're already on OnDemand and in the player view, go back to browser
-        if self.ch_idx == 1 and self.stack.currentIndex() == 0:
-            # Stop current OnDemand playback
-            self.player.stop()
-            self.ondemand_content = None
-            self.ondemand_start_time = None
-            self.stack.setCurrentIndex(2)
-            self.ondemand.content_list.setFocus()
-            self._osd("OnDemand - Browse & Select")
+        """Show the OnDemand channel, resuming playback if a show is in progress."""
+
+        # If OnDemand is currently playing and we switch back to it, resume
+        if self.ondemand_content and self.ondemand_start_time:
+            elapsed_ms = int((datetime.now() - self.ondemand_start_time).total_seconds() * 1000)
+            duration = self._get_duration(self.ondemand_content)
+
+            if elapsed_ms < duration:
+                # Resume playback from the correct timestamp
+                self.stack.setCurrentIndex(0)
+                self.video.setFocus()
+                self._load_program_enhanced(self.ondemand_content, elapsed_ms)
+                self._osd(f"OnDemand - {format_show_name(self.ondemand_content)}")
+            else:
+                # Playback finished while away; show browser
+                self.ondemand_content = None
+                self.ondemand_start_time = None
+                self.stack.setCurrentIndex(2)
+                self.ondemand.refresh_content()
+                self.ondemand.content_list.setFocus()
+                self._osd("OnDemand - Browse & Select")
         else:
-            # Show OnDemand browser
-            self.player.stop()  # Stop any current playback
+            # No content - show browser normally
+            self.player.stop()
             self.stack.setCurrentIndex(2)
             self.ondemand.refresh_content()
             self.ondemand.content_list.setFocus()
