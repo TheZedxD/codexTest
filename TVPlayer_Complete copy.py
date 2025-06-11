@@ -3855,6 +3855,8 @@ class TVPlayer(QMainWindow):
                         QTimer.singleShot(100, lambda: self._tune_to_channel(current_channel))
                         
         except Exception as e:
+            logging.error(f"Media status change error: {e}")
+
     def _on_duration_changed(self, duration):
         """Handle duration change - useful for seeking verification."""
         if duration > 0:
@@ -3867,29 +3869,6 @@ class TVPlayer(QMainWindow):
                     self.player.setPosition(seek_pos)
 
     def _on_player_error(self, error=None):
-        """Enhanced player error handling."""
-        if error is None:
-            error = self.player.error()
-            
-        error_messages = {
-            QMediaPlayer.NoError: "No error",
-            QMediaPlayer.ResourceError: "Resource error - File may be corrupted or inaccessible",
-            QMediaPlayer.FormatError: "Format error - Unsupported video format",
-            QMediaPlayer.NetworkError: "Network error - Check file location",
-            QMediaPlayer.AccessDeniedError: "Access denied - Check file permissions"
-        }
-        
-        if hasattr(QMediaPlayer, 'ServiceMissingError'):
-            error_messages[QMediaPlayer.ServiceMissingError] = "Service missing - Media codecs may be missing"
-        
-        error_msg = error_messages.get(error, f"Unknown error ({error})")
-        logging.error(f"Media player error: {error_msg}")
-        self._osd(f"Playback Error: {error_msg}")
-        
-        # Try to advance to next program on error
-        if self.ch_idx > 1:
-            QTimer.singleShot(3000, lambda: self._advance_to_next_program(
-                self.channels_real[self.ch_idx - 2]))
         """Enhanced player error handling."""
         if error is None:
             error = self.player.error()
