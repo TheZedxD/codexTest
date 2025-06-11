@@ -513,6 +513,7 @@ class FlaskServerManager(QObject):
 
     <div class="nav-links">
         <a href="/media">[M] Media Browser</a>
+        <a href="/guide">[G] Channel Guide</a>
         <a href="/status">[S] System Status</a>
     </div>
 
@@ -737,6 +738,56 @@ loadMedia();
                 return jsonify(media_data)
             except Exception as e:
                 logging.error(f"Media API error: {e}")
+                return jsonify([])
+
+        @app.route('/guide')
+        def remote_guide():
+            """Simple channel guide page."""
+            return '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Infinite Tv Guide</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body{background:#000;color:#0f0;font-family:Consolas,monospace;padding:10px}
+        h1{text-align:center;margin:20px 10px;font-size:22px}
+        table{width:100%;border-collapse:collapse;margin-top:10px}
+        th,td{border:1px solid #0f0;padding:6px;text-align:left}
+        th{background:#001100}
+        tr:nth-child(even){background:#001000}
+        a{color:#0f0;text-decoration:none}
+    </style>
+</head>
+<body>
+    <h1>[GUIDE] CHANNEL LISTING</h1>
+    <a href="/">[<] BACK TO REMOTE</a>
+    <table id="guide"></table>
+<script>
+async function loadGuide(){
+    const res=await fetch('/api/guide');
+    const data=await res.json();
+    const tbl=document.getElementById('guide');
+    tbl.innerHTML='<tr><th>Channel</th><th>Now</th><th>Next</th></tr>'+
+        data.map(ch=>`<tr><td>${ch.channel}</td><td><a href="#" onclick="gotoCh(${ch.index});return false;">${ch.current}</a></td>`+
+        `<td>${ch.shows.slice(1,3).map(s=>s.title).join(' , ')}</td></tr>`).join('');
+}
+function gotoCh(idx){
+    fetch('/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'goto:'+idx})});
+}
+loadGuide();
+</script>
+</body>
+</html>
+            '''
+
+        @app.route('/api/guide')
+        def api_guide():
+            try:
+                guide = self.tv_player.get_guide_for_api()
+                return jsonify(guide)
+            except Exception as e:
+                logging.error(f"Guide API error: {e}")
                 return jsonify([])
 
         @app.route('/status')
@@ -2979,6 +3030,9 @@ class TVPlayer(QMainWindow):
         self.hotkey_file = Path(self.settings.get("hotkey_file", str(DEFAULT_HOTKEY_FILE)))
         self.durations = self._load_cache()
         self.last_ch_idx: Optional[int] = None
+        # Keep track of last show order per channel to avoid identical
+        # shuffles when rebuilding schedules
+        self._last_show_order: Dict[Path, List[str]] = {}
 
         # Global schedule start time - all channels sync to this (midnight today for consistency)
         self.global_schedule_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2998,6 +3052,10 @@ class TVPlayer(QMainWindow):
         self.channels_real = discover_channels(ROOT_CHANNELS)
         self.channels = [None, "OnDemand"] + self.channels_real
         self._rebuild_logos()
+
+        # Load previous shuffle order for each channel if available
+        for ch in self.channels_real:
+            self._last_show_order[ch] = self._load_last_order(ch)
 
         # Use default channel icon as application icon
         if self.channels_real:
@@ -3302,6 +3360,25 @@ class TVPlayer(QMainWindow):
             'channels_count': len(self.channels_real)
         }
 
+    def get_guide_for_api(self) -> List[Dict]:
+        """Return a lightweight schedule for the remote guide page."""
+        now = datetime.now()
+        guide = []
+        for idx, channel in enumerate(self.channels_real, start=2):
+            schedule = self.get_schedule_for_guide(channel, now, 2)
+            shows = [
+                {
+                    'title': format_show_name(Path(p)),
+                    'time': t.strftime('%H:%M')
+                }
+                for t, p, d, a in schedule if not a
+            ]
+            current = self.get_current_program(channel)
+            current_title = format_show_name(Path(current[1])) if current else ''
+            guide.append({'index': idx, 'channel': channel.name,
+                          'current': current_title, 'shows': shows})
+        return guide
+
     # ── ENHANCED REMOTE COMMAND HANDLING ──────────────────────────────────
     def handle_remote_command(self, cmd: str):
         """Enhanced remote command handling with volume controls."""
@@ -3328,6 +3405,12 @@ class TVPlayer(QMainWindow):
                     self._osd(f"OnDemand Playback: {format_show_name(media_path)}")
                     if hasattr(self, 'info') and self.info.isVisible():
                         self._update_info_display()
+                    return
+                elif cmd_name == 'goto':
+                    try:
+                        self.go_channel_index(int(cmd_param))
+                    except ValueError:
+                        pass
                     return
                     
             # Standard commands
@@ -3369,8 +3452,22 @@ class TVPlayer(QMainWindow):
         shows = list(gather_files(channel / "Shows"))
         ads = list(gather_files(channel / "Commercials"))
 
-        # Shuffle content so each schedule rebuild is unique
-        random.shuffle(shows)
+        # Shuffle content so each schedule rebuild is unique and not identical
+        # to the previous shuffle for this channel
+        # Load previously used order from disk as fallback
+        prev_order = self._last_show_order.get(channel)
+        if prev_order is None:
+            prev_order = self._load_last_order(channel)
+        attempts = 0
+        while attempts < 5:
+            random.shuffle(shows)
+            if [str(s) for s in shows] != prev_order or len(shows) < 2:
+                break
+            attempts += 1
+        current_order = [str(s) for s in shows]
+        self._last_show_order[channel] = current_order
+        self._save_last_order(channel, current_order)
+
         random.shuffle(ads)
         
         if not shows:
@@ -3864,9 +3961,16 @@ class TVPlayer(QMainWindow):
         if self.last_ch_idx is None or self.last_ch_idx == self.ch_idx:
             self._osd("No previous channel")
             return
-        
+
         delta = self.last_ch_idx - self.ch_idx
         self.change_channel(delta)
+
+    def go_channel_index(self, index: int):
+        """Switch directly to a channel by index (0 = guide, 1 = on-demand)."""
+        if 0 <= index < len(self.channels):
+            delta = index - self.ch_idx
+            if delta:
+                self.change_channel(delta)
 
     # ── MEDIA MANAGEMENT METHODS ──────────────────────────────────
     def _get_duration(self, path: Path) -> int:
@@ -3894,6 +3998,24 @@ class TVPlayer(QMainWindow):
                 json.dump(self.durations, f, indent=2)
         except Exception as e:
             logging.warning(f"Failed to save cache: {e}")
+
+    def _load_last_order(self, channel: Path) -> List[str]:
+        """Load last shuffled show order for a channel."""
+        file = SCHEDULE_DIR / f"{channel.name}_order.json"
+        try:
+            with open(file, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def _save_last_order(self, channel: Path, order: List[str]):
+        """Persist last shuffled show order for a channel."""
+        file = SCHEDULE_DIR / f"{channel.name}_order.json"
+        try:
+            with open(file, 'w') as f:
+                json.dump(order, f)
+        except Exception as e:
+            logging.warning(f"Failed to save schedule cache for {channel}: {e}")
 
     def _load_settings(self) -> Dict:
         """Load application settings."""
