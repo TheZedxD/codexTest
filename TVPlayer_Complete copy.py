@@ -489,6 +489,9 @@ class FlaskServerManager(QObject):
         <button class="btn vol-btn small" onclick="send('cursor_left')">[<] LEFT</button>
         <button class="btn vol-btn small" onclick="send('cursor_right')">[>] RIGHT</button>
     </div>
+    <div class="volume-row">
+        <button class="btn vol-btn small" onclick="send('cursor_back')">[ESC] CLOSE</button>
+    </div>
 
     <div class="volume-group">
         <div class="volume-title">[VOL] VOLUME MATRIX</div>
@@ -2929,6 +2932,10 @@ class CursorController(QObject):
     def select(self):
         self._send(Qt.Key_Return)
 
+    def back(self):
+        """Send an Escape key press to close dialogs or go back."""
+        self._send(Qt.Key_Escape)
+
 # ───────────── MAIN TV PLAYER CLASS - ENHANCED AND COMPLETE ─────────────
 class TVPlayer(QMainWindow):
     DEFAULT_KEYS = {
@@ -3342,7 +3349,8 @@ class TVPlayer(QMainWindow):
                 "cursor_down": self.cursor.down,
                 "cursor_left": self.cursor.left,
                 "cursor_right": self.cursor.right,
-                "cursor_ok": self.cursor.select
+                "cursor_ok": self.cursor.select,
+                "cursor_back": self.cursor.back
             }
             
             if cmd in commands:
@@ -3705,6 +3713,7 @@ class TVPlayer(QMainWindow):
         self.player.pause()
         self.stack.setCurrentIndex(1)
         self.guide.refresh()
+        self.guide.table.setFocus()
         self._osd("TV GUIDE - 12 Hour Schedule")
         self._stop_static()
         
@@ -3720,12 +3729,14 @@ class TVPlayer(QMainWindow):
             self.ondemand_content = None
             self.ondemand_start_time = None
             self.stack.setCurrentIndex(2)
+            self.ondemand.content_list.setFocus()
             self._osd("OnDemand - Browse & Select")
         else:
             # Show OnDemand browser
             self.player.stop()  # Stop any current playback
             self.stack.setCurrentIndex(2)
             self.ondemand.refresh_content()
+            self.ondemand.content_list.setFocus()
             self._osd("OnDemand - Browse & Select")
 
         self._stop_static()
@@ -3735,6 +3746,7 @@ class TVPlayer(QMainWindow):
     def _tune_to_channel(self, channel: Path):
         """Tune to a specific channel - joins program already in progress."""
         self.stack.setCurrentIndex(0)
+        self.video.setFocus()
         
         if hasattr(self, 'info') and self.info.isVisible():
             self._update_info_display()
@@ -3815,6 +3827,7 @@ class TVPlayer(QMainWindow):
         self.ondemand_content = content_path
         self.ondemand_start_time = datetime.now()
         self._load_program_enhanced(content_path, 0)
+        self.video.setFocus()
         QTimer.singleShot(800, self._hide_loading)
         logging.info(f"Started OnDemand playback: {content_path}")
 
@@ -3828,6 +3841,7 @@ class TVPlayer(QMainWindow):
                 self.ondemand_content = None
                 self.ondemand_start_time = None
                 self.stack.setCurrentIndex(2)
+                self.ondemand.content_list.setFocus()
                 self._osd("OnDemand - Browse & Select")
             else:
                 # Already in browser

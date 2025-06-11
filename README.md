@@ -2,6 +2,8 @@
 
 Infinite Tv is a PyQt based live TV player. Use the installer for your
 platform to install dependencies and create the initial folder structure.
+The application is tested on both Windows and Linux and should work out of
+the box on either system.
 
 ## Linux Install
 
@@ -43,4 +45,12 @@ overlay while rebuilding the guide so the listings always match what is
 actually playing.
 
 The built-in web remote is available on the LAN after startup. Open the
-displayed URL in any browser to control playback from another device.
+displayed URL in any browser to control playback from another device. Arrow
+buttons let you move the on-screen focus without using a mouse and the new
+`[ESC] CLOSE` button can dismiss dialogs remotely.
+
+## Troubleshooting
+
+Ensure Python 3 and pip are installed and available in your `PATH`. If the
+installers fail to download packages because your system lacks internet
+access, install the packages listed in `requirements.txt` manually.
