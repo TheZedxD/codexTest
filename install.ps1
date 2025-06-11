@@ -16,7 +16,7 @@ if (-not $pip) {
     python -m ensurepip --default-pip
 }
 
-Write-Host "Installing Python packages..."
+Write-Host "Installing Python packages (PyQt5, Flask, psutil, requests)..."
 pip install -r requirements.txt
 $pkgOk = $?
 

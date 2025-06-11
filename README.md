@@ -13,9 +13,10 @@ Run the installer from a terminal:
 bash install.sh
 ```
 
-The script installs Python packages and creates `Channels/Channel1/Shows` and
-`Channels/Channel1/Commercials` along with `schedules` and `logs`. You may copy
-your media files during setup when prompted.
+The script installs Python packages (including `requests`) and creates
+`Channels/Channel1/Shows` and `Channels/Channel1/Commercials` along with
+`schedules` and `logs`. You may copy your media files during setup when
+prompted.
 
 Videos can be organised in subfolders inside the `Shows` or `Commercials`
 directories (e.g. `Shows/Season 1`). The player will automatically search these
@@ -48,6 +49,11 @@ The built-in web remote is available on the LAN after startup. Open the
 displayed URL in any browser to control playback from another device. Arrow
 buttons let you move the on-screen focus without using a mouse and the new
 `[ESC] CLOSE` button can dismiss dialogs remotely.
+
+The TV guide now includes a small panel in the top-right corner showing the
+current system time and local weather when internet access is available. Click
+the panel or the `refresh` link to update the information or view the day's
+forecast.
 
 ## Troubleshooting
 

@@ -34,7 +34,7 @@ if ! command -v ffprobe >/dev/null; then
     fi
 fi
 
-echo "Installing Python packages..."
+echo "Installing Python packages (PyQt5, Flask, psutil, requests)..."
 if pip3 install --user -r requirements.txt; then
     pkg_ok=true
 else
