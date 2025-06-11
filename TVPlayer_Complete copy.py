@@ -2955,8 +2955,12 @@ class TVPlayer(QMainWindow):
 
     def _build_tv_schedule(self, channel: Path) -> List[Tuple[datetime, str, int, bool]]:
         """Build a TV schedule for a channel - plays videos in order, synchronized across channels."""
-        shows = sorted(gather_files(channel / "Shows"))  # Sort for consistent ordering
-        ads = sorted(gather_files(channel / "Commercials"))
+        shows = list(gather_files(channel / "Shows"))
+        ads = list(gather_files(channel / "Commercials"))
+
+        # Shuffle content so each schedule rebuild is unique
+        random.shuffle(shows)
+        random.shuffle(ads)
         
         if not shows:
             logging.warning(f"No shows found for channel {channel.name}")
@@ -3239,8 +3243,8 @@ class TVPlayer(QMainWindow):
         self.schedules.clear()
         self.current_schedule_index.clear()
         
-        # Reset global schedule start time to current midnight
-        self.global_schedule_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        # Start a brand new synchronized schedule beginning now
+        self.global_schedule_start = datetime.now()
         
         # Rebuild all schedules
         for channel in self.channels_real:
@@ -3799,8 +3803,8 @@ class TVPlayer(QMainWindow):
             self.schedules.clear()
             self.current_schedule_index.clear()
             
-            # Reset global schedule start time to current midnight
-            self.global_schedule_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            # Start new schedules from the current moment
+            self.global_schedule_start = datetime.now()
             
             # Stop current playback
             self.player.stop()
@@ -4184,8 +4188,8 @@ class TVPlayer(QMainWindow):
         self._rebuild_logos()
         self.schedules.clear()
         
-        # Reset global schedule start
-        self.global_schedule_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        # Start a fresh synchronized schedule from now
+        self.global_schedule_start = datetime.now()
         
         # Rebuild all schedules
         for channel in self.channels_real:
