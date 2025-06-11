@@ -2153,6 +2153,21 @@ class GuideWidget(QWidget):
         self.net_label = QLabel("NET: ?")
         header.addWidget(self.remote_label)
         header.addWidget(self.net_label)
+        # panel showing system time and weather
+        self.info_box = QGroupBox()
+        info_layout = QVBoxLayout(self.info_box)
+        info_layout.setContentsMargins(5, 5, 5, 5)
+        info_layout.setSpacing(2)
+        self.time_label = QLabel()
+        self.weather_label = QLabel("Weather: ...")
+        self.refresh_label = QLabel("<u>refresh</u>")
+        self.refresh_label.setCursor(Qt.PointingHandCursor)
+        self.refresh_label.mousePressEvent = lambda e: self.update_weather()
+        info_layout.addWidget(self.time_label, alignment=Qt.AlignCenter)
+        info_layout.addWidget(self.weather_label, alignment=Qt.AlignCenter)
+        info_layout.addWidget(self.refresh_label, alignment=Qt.AlignRight)
+        self.info_box.mousePressEvent = lambda e: self.show_weather_dialog()
+        header.addWidget(self.info_box)
         main_layout.addLayout(header)
         
         # WIP Panel - Enhanced version
@@ -2199,10 +2214,22 @@ class GuideWidget(QWidget):
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.refresh)
         self.refresh_timer.start(15 * 60 * 1000)  # 15 minutes
-        
+
         self.now_playing_timer = QTimer(self)
         self.now_playing_timer.timeout.connect(self._update_now_playing)
         self.now_playing_timer.start(60000)  # 1 minute
+
+        # timers for time/weather panel
+        self.time_timer = QTimer(self)
+        self.time_timer.timeout.connect(self._update_time)
+        self.time_timer.start(60000)
+
+        self.weather_timer = QTimer(self)
+        self.weather_timer.timeout.connect(self.update_weather)
+        self.weather_timer.start(3 * 60 * 60 * 1000)
+
+        self._update_time()
+        self.update_weather()
 
     def update_status_indicators(self):
         """Update remote and internet status indicators."""
@@ -2211,12 +2238,7 @@ class GuideWidget(QWidget):
         self.remote_label.setText("REMOTE" + (" OK" if remote_ok else " OFF"))
         self.remote_label.setStyleSheet(f"color: {remote_color}")
 
-        connected = False
-        try:
-            socket.create_connection(("8.8.8.8", 53), timeout=2).close()
-            connected = True
-        except Exception:
-            connected = False
+        connected = self._has_net()
         net_color = "#00ff00" if connected else "#ff0000"
         self.net_label.setText("NET" + (" OK" if connected else " OFF"))
         self.net_label.setStyleSheet(f"color: {net_color}")
@@ -2552,6 +2574,59 @@ class GuideWidget(QWidget):
         """Update the guide to refresh 'now playing' indicators."""
         self.refresh()
 
+    # ---- Time and weather panel helpers ----
+    def _update_time(self):
+        """Update the current time display."""
+        self.time_label.setText(datetime.now().strftime('%a %H:%M'))
+
+    def update_weather(self):
+        """Fetch weather info if internet is available."""
+        self.weather_label.setText('Loading weather...')
+        if not self._has_net():
+            self.weather_label.setText('Weather: N/A')
+            self.weather_data = None
+            return
+        try:
+            import requests
+            res = requests.get('https://wttr.in/?format=j1', timeout=5)
+            data = res.json()
+            cur = data['current_condition'][0]
+            temp = cur['temp_C']
+            desc = cur['weatherDesc'][0]['value']
+            self.weather_label.setText(f"{temp}\u00B0C {desc}")
+            self.weather_data = data['weather'][0]
+        except Exception:
+            self.weather_label.setText('Weather: N/A')
+            self.weather_data = None
+
+    def show_weather_dialog(self):
+        """Display a dialog with today's detailed weather."""
+        if not getattr(self, 'weather_data', None):
+            return
+        day = self.weather_data
+        astronomy = day.get('astronomy', [{}])[0]
+        text = (
+            f"Max: {day.get('maxtempC')}\u00B0C\n"
+            f"Min: {day.get('mintempC')}\u00B0C\n"
+            f"Sunrise: {astronomy.get('sunrise','?')}\n"
+            f"Sunset: {astronomy.get('sunset','?')}"
+        )
+        dlg = QDialog(self)
+        dlg.setWindowTitle('[WEATHER] Today')
+        l = QVBoxLayout(dlg)
+        l.addWidget(QLabel(text))
+        close_btn = QPushButton('[OK]')
+        close_btn.clicked.connect(dlg.accept)
+        l.addWidget(close_btn, alignment=Qt.AlignCenter)
+        dlg.exec_()
+
+    def _has_net(self) -> bool:
+        try:
+            socket.create_connection(('8.8.8.8', 53), timeout=2).close()
+            return True
+        except Exception:
+            return False
+
 # ───────────── On Demand widget ─────────────
 class OnDemandWidget(QWidget):
     """OnDemand channel for browsing and selecting shows."""
@@ -2850,7 +2925,7 @@ class OnDemandWidget(QWidget):
 
 # ───────────── Remote widgets ─────────────
 class Remote(QWidget):
-    """Matrix-inspired floating remote control."""
+    """Matrix-inspired floating remote control with improved layout."""
     def __init__(self, tv: 'TVPlayer'):
         super().__init__(None, Qt.Tool | Qt.WindowStaysOnTopHint)
         self.setWindowTitle("[REM] TV Remote")
@@ -2881,25 +2956,25 @@ class Remote(QWidget):
             }
         """)
 
-        # layout: 3 rows × 4 columns
+        # layout: 3 rows × 4 columns (reorganised for a more logical flow)
         grid = QGridLayout(self)
         grid.setSpacing(6)
 
-        # Row 0
-        grid.addWidget(self._btn("INFO",     tv.toggle_info),      0, 0)
+        # Row 0 - navigation controls
+        grid.addWidget(self._btn("HOME",     tv.go_guide),         0, 0)
         grid.addWidget(self._btn("GUIDE",    tv.go_guide),         0, 1)
-        grid.addWidget(self._btn("DEMAND",   tv.go_ondemand),      0, 2)
-        grid.addWidget(self._btn("LAST",     tv.go_last_channel),  0, 3)
+        grid.addWidget(self._btn("INFO",     tv.toggle_info),      0, 2)
+        grid.addWidget(self._btn("DEMAND",   tv.go_ondemand),      0, 3)
 
-        # Row 1
+        # Row 1 - channel / playback controls
         grid.addWidget(self._btn("CH UP",    lambda: tv.change_channel(1)), 1, 0)
         grid.addWidget(self._btn("PLAY",     tv.toggle_play),      1, 1)
         grid.addWidget(self._btn("MUTE",     tv.mute),             1, 2)
         grid.addWidget(self._btn("CH DN",    lambda: tv.change_channel(-1)),1, 3)
 
-        # Row 2
+        # Row 2 - volume and misc controls
         grid.addWidget(self._btn("VOL-",     tv.vol_down),         2, 0)
-        grid.addWidget(self._btn("HOME",     tv.go_guide),         2, 1)
+        grid.addWidget(self._btn("LAST",     tv.go_last_channel),  2, 1)
         grid.addWidget(self._btn("VOL+",     tv.vol_up),           2, 2)
         grid.addWidget(self._btn("FULL",     tv.toggle_fs),        2, 3)
 
