@@ -2749,10 +2749,17 @@ class TVPlayer(QMainWindow):
         logging.info("All channels synchronized to: %s", self.global_schedule_start.strftime('%Y-%m-%d %H:%M'))
         
         # Build initial schedules for all channels
+        self._show_loading("Building schedules...")
         for i, channel in enumerate(self.channels_real):
             if channel not in self.schedules:
                 self.schedules[channel] = self._build_tv_schedule(channel)
-                logging.info("Built schedule for channel %d/%d: %s", i+1, len(self.channels_real), channel.name)
+                logging.info(
+                    "Built schedule for channel %d/%d: %s",
+                    i + 1,
+                    len(self.channels_real),
+                    channel.name,
+                )
+        self._hide_loading()
         
         QTimer.singleShot(100, lambda: self.change_channel(0))  # Start with guide
         QTimer.singleShot(500, self.show_web_server_info)  # Show IP info after init
@@ -2818,6 +2825,20 @@ class TVPlayer(QMainWindow):
             font-family: "Consolas", monospace;
         """)
         self.info.hide()
+
+        # Loading overlay used during schedule refreshes
+        self.loading_label = QLabel("Refreshing...", self)
+        self.loading_label.setStyleSheet("""
+            font-size: 24px;
+            color: #00ff00;
+            background: rgba(0,0,0,220);
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #00ff00;
+            font-weight: bold;
+        """)
+        self.loading_label.setAlignment(Qt.AlignCenter)
+        self.loading_label.hide()
 
     # ── ENHANCED WEB SERVER METHODS ──────────────────────────────────
     def show_web_server_info(self):
@@ -3239,13 +3260,15 @@ class TVPlayer(QMainWindow):
 
     def reload_schedule(self):
         """Reload program schedules with synchronized timing."""
+        self._show_loading("Refreshing schedules...")
+
         # Clear existing schedules
         self.schedules.clear()
         self.current_schedule_index.clear()
-        
+
         # Start a brand new synchronized schedule beginning now
         self.global_schedule_start = datetime.now()
-        
+
         # Rebuild all schedules
         for channel in self.channels_real:
             self.schedules[channel] = self._build_tv_schedule(channel)
@@ -3258,6 +3281,7 @@ class TVPlayer(QMainWindow):
                 current_channel = self.channels_real[real_channel_idx]
                 self._tune_to_channel(current_channel)
         
+        self._hide_loading()
         self._osd("Schedules Reloaded")
 
     # ── ENHANCED CHANNEL NAVIGATION METHODS ──────────────────────────────────
@@ -3769,6 +3793,19 @@ class TVPlayer(QMainWindow):
                 self.static_movie.stop()
             self.static_label.hide()
 
+    # Loading overlay helpers
+    def _show_loading(self, message: str = "Loading..."):
+        """Display loading overlay with a message."""
+        self.loading_label.setText(message)
+        self.loading_label.setGeometry(self.rect())
+        self.loading_label.raise_()
+        self.loading_label.show()
+        QApplication.processEvents()
+
+    def _hide_loading(self):
+        """Hide loading overlay."""
+        self.loading_label.hide()
+
     # ── ENHANCED SETTINGS MANAGEMENT ──────────────────────────────────
     def show_settings(self):
         """Enhanced settings dialog with schedule reset warning."""
@@ -4217,6 +4254,9 @@ class TVPlayer(QMainWindow):
         
         if hasattr(self, 'static_label'):
             self.static_label.setGeometry(self.rect())
+
+        if hasattr(self, 'loading_label') and self.loading_label.isVisible():
+            self.loading_label.setGeometry(self.rect())
         
         if hasattr(self, 'info') and self.info.isVisible():
             self._update_info_display()

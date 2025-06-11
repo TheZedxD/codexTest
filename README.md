@@ -36,3 +36,7 @@ After installation launch the player with:
 ```bash
 python "TVPlayer_Complete copy.py"
 ```
+
+When starting up or reloading schedules the player displays a short loading
+overlay while rebuilding the guide so the listings always match what is
+actually playing.
