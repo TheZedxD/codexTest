@@ -940,6 +940,12 @@ class SettingsDialog(QDialog):
         self.min_show_len.setValue(s.get("min_show_minutes", 5))
         self.min_show_len.setSuffix(" minutes")
         sched_layout.addRow("Minimum Show Length:", self.min_show_len)
+
+        self.ad_break_len = QSpinBox()
+        self.ad_break_len.setRange(1, 30)
+        self.ad_break_len.setValue(s.get("ad_break_minutes", 3))
+        self.ad_break_len.setSuffix(" minutes")
+        sched_layout.addRow("Ad Break Length:", self.ad_break_len)
         
         layout.addWidget(sched_group)
         
@@ -984,6 +990,14 @@ class SettingsDialog(QDialog):
         hot_row.addWidget(browse_hot)
         file_layout.addRow("Hotkey File:", hot_row)
 
+        self.channels_edit = QLineEdit(s.get("channels_dir", str(ROOT_CHANNELS)))
+        browse_chan = QPushButton("[...]")
+        browse_chan.clicked.connect(lambda: self._browse_folder(self.channels_edit))
+        chan_row = QHBoxLayout()
+        chan_row.addWidget(self.channels_edit)
+        chan_row.addWidget(browse_chan)
+        file_layout.addRow("Channels Folder:", chan_row)
+
         layout.addWidget(file_group)
         
         # Buttons
@@ -1005,6 +1019,11 @@ class SettingsDialog(QDialog):
         path, _ = QFileDialog.getSaveFileName(self, "Select File", edit.text(), "JSON Files (*.json)")
         if path:
             edit.setText(path)
+
+    def _browse_folder(self, edit: QLineEdit):
+        folder = QFileDialog.getExistingDirectory(self, "Select Folder", edit.text(), QFileDialog.ShowDirsOnly)
+        if folder:
+            edit.setText(folder)
         
     def result(self) -> Dict:
         return {
@@ -1012,9 +1031,11 @@ class SettingsDialog(QDialog):
             "subtitle_size": self.sub_sz.value(),
             "static_fx": self.chk_stat.isChecked(),
             "min_show_minutes": self.min_show_len.value(),
+            "ad_break_minutes": self.ad_break_len.value(),
             "web_port": self.web_port.value(),
             "cache_file": self.cache_edit.text(),
-            "hotkey_file": self.hotkey_edit.text()
+            "hotkey_file": self.hotkey_edit.text(),
+            "channels_dir": self.channels_edit.text()
         }
 
 # ───────────── Hot-key dialog ─────────────
@@ -2196,10 +2217,13 @@ class GuideWidget(QWidget):
             dlg_layout.addWidget(lbl)
 
             btn_row = QHBoxLayout()
+            watch_btn = QPushButton("[WATCH]")
+            watch_btn.clicked.connect(lambda: (dialog.accept(), self._jump_to_show(data)))
             open_btn = QPushButton("[OPEN]")
             open_btn.clicked.connect(lambda: open_in_file_manager(Path(data['path']).parent))
             close_btn = QPushButton("[OK]")
             close_btn.clicked.connect(dialog.accept)
+            btn_row.addWidget(watch_btn)
             btn_row.addWidget(open_btn)
             btn_row.addWidget(close_btn)
             dlg_layout.addLayout(btn_row)
@@ -2226,7 +2250,7 @@ class GuideWidget(QWidget):
         channel = data['channel']
         start_time = data['start']
         
-        channel_idx = self.tv.channels_real.index(channel) + 1
+        channel_idx = self.tv.channels_real.index(channel) + 2
         delta = channel_idx - self.tv.ch_idx
         self.tv.change_channel(delta)
         
@@ -2716,6 +2740,8 @@ class TVPlayer(QMainWindow):
         "subtitle_size": 24,
         "static_fx": True,
         "min_show_minutes": 5,
+        "ad_break_minutes": 3,
+        "channels_dir": str(ROOT_CHANNELS),
         "web_port": 5050,
         "cache_file": str(DEFAULT_CACHE_FILE),
         "hotkey_file": str(DEFAULT_HOTKEY_FILE)
@@ -2729,6 +2755,9 @@ class TVPlayer(QMainWindow):
 
         # Load settings and cache
         self.settings = self._load_settings()
+        global ROOT_CHANNELS
+        ROOT_CHANNELS = Path(self.settings.get("channels_dir", str(ROOT_CHANNELS)))
+        ROOT_CHANNELS.mkdir(exist_ok=True)
         self.cache_file = Path(self.settings.get("cache_file", str(DEFAULT_CACHE_FILE)))
         self.hotkey_file = Path(self.settings.get("hotkey_file", str(DEFAULT_HOTKEY_FILE)))
         self.durations = self._load_cache()
@@ -3129,8 +3158,8 @@ class TVPlayer(QMainWindow):
             
             # Add ad break if we have ads
             if ads and show_index % 2 == 0:  # Add ads every 2 shows
-                # Add 3-minute ad break
-                ad_break_duration = AD_BREAK_DURATION_MS
+                # Add ad break
+                ad_break_duration = self.settings.get("ad_break_minutes", 3) * 60 * 1000
                 remaining_time = ad_break_duration
                 ad_break_start = current_time
                 
@@ -3954,9 +3983,15 @@ class TVPlayer(QMainWindow):
             self.sub_label.setFont(QFont("Consolas", self.settings["subtitle_size"]))
             
             # Check if schedule-affecting settings changed
-            schedule_affecting = ['min_show_minutes']
+            schedule_affecting = ['min_show_minutes', 'ad_break_minutes']
             needs_schedule_reset = any(old_settings.get(key) != self.settings.get(key) for key in schedule_affecting)
-            
+
+            if old_settings.get('channels_dir') != self.settings.get('channels_dir'):
+                global ROOT_CHANNELS
+                ROOT_CHANNELS = Path(self.settings['channels_dir'])
+                ROOT_CHANNELS.mkdir(exist_ok=True)
+                self.reload_channels()
+
             # Check if web port changed
             if old_settings.get("web_port") != self.settings.get("web_port"):
                 self.restart_web_server()
