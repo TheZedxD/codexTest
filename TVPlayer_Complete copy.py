@@ -643,7 +643,7 @@ function renderMedia() {
             <div class="media-info">[TIME] ${item.duration}</div>
             <div class="media-info">[TYPE] ${item.type}</div>
             <div class="media-info">[SIZE] ${item.size}</div>
-            <button class="play-btn" onclick="playMedia('${item.path}')">[>] EXECUTE PLAYBACK</button>
+            <button class="play-btn" data-path="${encodeURIComponent(item.path)}" onclick="playMedia(this.dataset.path)">[>] EXECUTE PLAYBACK</button>
         </div>
     `).join('');
 }
@@ -670,7 +670,8 @@ function applyFilters() {
     renderMedia();
 }
 
-async function playMedia(path) {
+async function playMedia(encodedPath) {
+    const path = decodeURIComponent(encodedPath);
     try {
         const response = await fetch('/action', {
             method: 'POST',
@@ -3432,9 +3433,11 @@ class TVPlayer(QMainWindow):
 
     def _start_ondemand_playback(self, content_path: Path):
         """Start playing OnDemand content."""
+        self._show_loading("Loading OnDemand...")
         self.ondemand_content = content_path
         self.ondemand_start_time = datetime.now()
         self._load_program_enhanced(content_path, 0)
+        QTimer.singleShot(800, self._hide_loading)
         logging.info(f"Started OnDemand playback: {content_path}")
 
     def go_ondemand(self):
