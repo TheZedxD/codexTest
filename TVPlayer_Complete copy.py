@@ -2942,8 +2942,21 @@ class TVPlayer(QMainWindow):
                 cmd_param = cmd_parts[1]
                 
                 if cmd_name == 'play_media':
-                    self._start_ondemand_playback(Path(cmd_param))
-                    self.change_channel(1 - self.ch_idx)  # Go to OnDemand
+                    # Start the requested media on the OnDemand channel
+                    media_path = Path(cmd_param)
+                    self._start_ondemand_playback(media_path)
+
+                    # Remember previous channel for "last" function
+                    prev_idx = self.ch_idx
+                    if prev_idx > 1:
+                        self.last_ch_idx = prev_idx
+
+                    # Switch to the OnDemand channel but keep playing
+                    self.ch_idx = 1
+                    self.stack.setCurrentIndex(0)
+                    self._osd(f"OnDemand Playback: {format_show_name(media_path)}")
+                    if hasattr(self, 'info') and self.info.isVisible():
+                        self._update_info_display()
                     return
                     
             # Standard commands
