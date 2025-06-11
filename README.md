@@ -1,9 +1,9 @@
-# TVPlayer Setup
+# Infinite Tv Setup
 
-This project contains a PyQt based TV player. Use the provided installer for
-your platform to set up required packages and the initial folder structure.
+Infinite Tv is a PyQt based live TV player. Use the installer for your
+platform to install dependencies and create the initial folder structure.
 
-## Linux
+## Linux Install
 
 Run the installer from a terminal:
 
@@ -11,15 +11,15 @@ Run the installer from a terminal:
 bash install.sh
 ```
 
-The script installs Python dependencies, creates `Channels/Channel1/Shows` and
-`Channels/Channel1/Commercials` as well as `schedules` and `logs`.
-It also offers to copy your media files during setup.
+The script installs Python packages and creates `Channels/Channel1/Shows` and
+`Channels/Channel1/Commercials` along with `schedules` and `logs`. You may copy
+your media files during setup when prompted.
 
 Videos can be organised in subfolders inside the `Shows` or `Commercials`
 directories (e.g. `Shows/Season 1`). The player will automatically search these
 subfolders for media files.
 
-## Windows
+## Windows Install
 
 Open PowerShell and execute:
 
@@ -27,9 +27,10 @@ Open PowerShell and execute:
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-The Windows installer performs the same steps as the Linux version.
+The Windows installer performs the same steps as the Linux script and works in
+PowerShell. Administrator permissions are not required.
 
-## Running the Application
+## Running Infinite Tv
 
 After installation launch the player with:
 
@@ -40,3 +41,6 @@ python "TVPlayer_Complete copy.py"
 When starting up or reloading schedules the player displays a short loading
 overlay while rebuilding the guide so the listings always match what is
 actually playing.
+
+The built-in web remote is available on the LAN after startup. Open the
+displayed URL in any browser to control playback from another device.
