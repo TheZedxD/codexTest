@@ -50,7 +50,8 @@ from PyQt5.QtWidgets import (
     QWidget, QShortcut, QKeySequenceEdit, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QSpinBox, QCheckBox, QSlider, QFormLayout,
     QStackedLayout, QSizePolicy, QLineEdit, QGroupBox, QMenu, QTreeWidget,
-    QTreeWidgetItem, QSplitter, QInputDialog,
+    QTreeWidgetItem, QSplitter, QInputDialog, QFocusFrame,
+    QListWidget, QListWidgetItem,
     QGraphicsDropShadowEffect
 )
 
@@ -416,6 +417,11 @@ class FlaskServerManager(QObject):
     def _create_app(self):
         """Create Flask application with all routes."""
         app = Flask(__name__)
+
+        @app.after_request
+        def add_headers(response):
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response
         
         @app.route('/')
         def remote_page():
@@ -1933,6 +1939,81 @@ class NetworkEditor(QMainWindow):
         """Open a path in the system file manager."""
         open_in_file_manager(path)
 
+# ───────────── Saved Channels Editor ─────────────
+class SavedChannelsDialog(QDialog):
+    """Manage saved channel folder list."""
+
+    def __init__(self, tv: 'TVPlayer', parent=None):
+        super().__init__(parent)
+        self.tv = tv
+        self.setWindowTitle("[CFG] Saved Channel Folders")
+        self.resize(500, 300)
+
+        self.setStyleSheet(
+            "QDialog {background:#000;color:#00ff00;}"
+            "QPushButton {background:#001100;color:#00ff00;border:2px solid #00ff00;padding:6px;font-weight:bold;}"
+            "QPushButton:hover {background:#003300;}"
+            "QListWidget {background:#001100;color:#00ff00;border:2px solid #00ff00;}"
+        )
+
+        layout = QVBoxLayout(self)
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget)
+
+        btn_row = QHBoxLayout()
+        add_btn = QPushButton("[ADD]")
+        remove_btn = QPushButton("[DEL]")
+        set_btn = QPushButton("[SET ACTIVE]")
+        btn_row.addWidget(add_btn)
+        btn_row.addWidget(remove_btn)
+        btn_row.addWidget(set_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+        close_btn = QPushButton("[CLOSE]")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn)
+
+        add_btn.clicked.connect(self.add_folder)
+        remove_btn.clicked.connect(self.remove_selected)
+        set_btn.clicked.connect(self.activate_selected)
+
+        self.refresh_list()
+
+    def refresh_list(self):
+        self.list_widget.clear()
+        for path in self.tv.settings.get("recent_channels", []):
+            self.list_widget.addItem(QListWidgetItem(path))
+
+    def add_folder(self):
+        folder = QFileDialog.getExistingDirectory(self, "[ADD] Channel Folder", str(ROOT_CHANNELS.parent))
+        if folder:
+            recents = self.tv.settings.get("recent_channels", [])
+            if folder not in recents:
+                recents.insert(0, folder)
+                self.tv.settings["recent_channels"] = recents[:5]
+                self.tv._save_settings()
+                self.refresh_list()
+                self.tv._populate_recent_menu()
+
+    def remove_selected(self):
+        item = self.list_widget.currentItem()
+        if item:
+            path = item.text()
+            recents = self.tv.settings.get("recent_channels", [])
+            if path in recents:
+                recents.remove(path)
+                self.tv.settings["recent_channels"] = recents
+                self.tv._save_settings()
+                self.refresh_list()
+                self.tv._populate_recent_menu()
+
+    def activate_selected(self):
+        item = self.list_widget.currentItem()
+        if item:
+            self.tv.load_channels_folder(item.text())
+            self.accept()
+
 # ───────────── Guide widget ─────────────
 class GuideWidget(QWidget):
     """12-hour TV guide with proper time slots and WIP panel."""
@@ -2146,6 +2227,7 @@ class GuideWidget(QWidget):
             logo = self.tv.channel_logo.get(channel)
             if logo:
                 channel_item.setIcon(QIcon(logo))
+            channel_item.setData(Qt.UserRole, {'channel': channel})
             self.table.setItem(row, 0, channel_item)
             
             # Get schedule
@@ -2266,6 +2348,12 @@ class GuideWidget(QWidget):
     def _on_cell_clicked(self, row: int, col: int):
         """Handle cell clicks."""
         if col == 0:
+            item = self.table.item(row, col)
+            if item and item.data(Qt.UserRole):
+                data = item.data(Qt.UserRole)
+                channel = data.get('channel')
+                if channel:
+                    self._jump_to_channel(channel)
             return
             
         item = self.table.item(row, col)
@@ -2317,15 +2405,19 @@ class GuideWidget(QWidget):
         item = self.table.itemAt(position)
         if not item or not item.data(Qt.UserRole):
             return
-            
+
         data = item.data(Qt.UserRole)
-        if data['is_ad']:
-            return
-            
+
         menu = QMenu(self)
-        jump_action = menu.addAction("[TV] Jump to Show")
-        jump_action.triggered.connect(lambda: self._jump_to_show(data))
-        menu.exec_(self.table.mapToGlobal(position))
+
+        if 'channel' in data:
+            menu.addAction("[TV] Jump to Channel", lambda: self._jump_to_channel(data['channel']))
+        elif not data.get('is_ad'):
+            jump_action = menu.addAction("[TV] Jump to Show")
+            jump_action.triggered.connect(lambda: self._jump_to_show(data))
+
+        if menu.actions():
+            menu.exec_(self.table.mapToGlobal(position))
     
     def _jump_to_show(self, data):
         """Jump to a specific show on a channel."""
@@ -2348,6 +2440,13 @@ class GuideWidget(QWidget):
                 self.tv._osd(f"Show starts in {minutes} minutes")
         else:
             self.tv._osd("Jumped to channel - show in progress")
+
+    def _jump_to_channel(self, channel: Path):
+        """Switch directly to the given channel."""
+        if channel in self.tv.channels_real:
+            channel_idx = self.tv.channels_real.index(channel) + 2
+            delta = channel_idx - self.tv.ch_idx
+            self.tv.change_channel(delta)
     
     def _update_upcoming_shows(self):
         """Update the upcoming shows display."""
@@ -2949,6 +3048,11 @@ class TVPlayer(QMainWindow):
         self.dev_remote = DevRemote(self)
         self.remote.hide()
         self.dev_remote.hide()
+
+        # Focus highlight for cursor navigation
+        self.focus_frame = QFocusFrame(self)
+        self.focus_frame.setStyleSheet("QFocusFrame{border:2px solid white;}")
+        QApplication.instance().focusChanged.connect(self._on_focus_changed)
         
         # Network Editor
         self.network_editor = NetworkEditor(self)
@@ -3315,11 +3419,21 @@ class TVPlayer(QMainWindow):
         """Get schedule data for the TV guide."""
         if channel not in self.schedules:
             self.schedules[channel] = self._build_tv_schedule(channel)
-        
+
         schedule = self.schedules[channel]
         end_time = start_time + timedelta(hours=hours)
-        
-        return [(t, p, d, a) for t, p, d, a in schedule if start_time <= t < end_time]
+
+        items = [(t, p, d, a) for t, p, d, a in schedule if start_time <= t < end_time]
+
+        current = self.get_current_program(channel)
+        if current:
+            c_start, program, duration, is_ad, _ = current
+            c_end = c_start + timedelta(milliseconds=duration)
+            if c_start < start_time and c_end > start_time:
+                if not items or items[0][0] != c_start:
+                    items.insert(0, (c_start, program, duration, is_ad))
+
+        return items
 
     def get_current_program(self, channel: Path) -> Optional[Tuple[datetime, str, int, bool, Dict]]:
         """Get the currently playing program for a channel based on synchronized schedule."""
@@ -4338,6 +4452,7 @@ class TVPlayer(QMainWindow):
         file_menu = menubar.addMenu("&Content")
         file_menu.addAction("[OPEN] &Open Channels Folder", self.open_channels_folder, "Ctrl+O")
         file_menu.addAction("[SELECT] &Select Channels Folder...", self.select_channels_folder)
+        file_menu.addAction("[SAVED] Manage Saved Folders", self.show_saved_channels_editor)
         self.recent_menu = file_menu.addMenu("[RECENT] Recent Folders")
         self._populate_recent_menu()
         file_menu.addSeparator()
@@ -4594,6 +4709,11 @@ class TVPlayer(QMainWindow):
         self.network_editor.raise_()
         self.network_editor.activateWindow()
 
+    def show_saved_channels_editor(self):
+        """Open saved channels manager."""
+        dlg = SavedChannelsDialog(self)
+        dlg.exec_()
+
     # ── WINDOW EVENT HANDLERS ──────────────────────────────────
     def resizeEvent(self, event):
         """Handle window resize."""
@@ -4610,6 +4730,10 @@ class TVPlayer(QMainWindow):
         
         if hasattr(self, 'info') and self.info.isVisible():
             self._update_info_display()
+
+    def _on_focus_changed(self, old, new):
+        if new:
+            self.focus_frame.setWidget(new)
 
     def closeEvent(self, event):
         """Enhanced close event with proper cleanup."""
