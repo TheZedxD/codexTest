@@ -138,10 +138,19 @@ def probe_duration(path: Path) -> int:
         logging.warning("ffprobe failure (%s) – using dummy duration for %s", e, path)
         return 30_000
 
-def gather_files(dir_: Path, exts=VIDEO_EXTS) -> List[Path]:
+def gather_files(dir_: Path, exts=VIDEO_EXTS, recursive: bool = True) -> List[Path]:
+    """Return media files from *dir_*.
+
+    If *recursive* is True (default) search subdirectories as well. This allows
+    season folders or other groupings inside the Shows/Commercials folders to be
+    detected automatically.
+    """
     if not dir_.exists():
         return []
-    return sorted(f for f in dir_.glob("*") if f.is_file() and f.suffix.lower() in exts)
+    pattern = "**/*" if recursive else "*"
+    return sorted(
+        f for f in dir_.glob(pattern) if f.is_file() and f.suffix.lower() in exts
+    )
 
 def ms_to_hms(ms: int) -> str:
     s = ms // 1000
