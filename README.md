@@ -15,6 +15,10 @@ The script installs Python dependencies, creates `Channels/Channel1/Shows` and
 `Channels/Channel1/Commercials` as well as `schedules` and `logs`.
 It also offers to copy your media files during setup.
 
+Videos can be organised in subfolders inside the `Shows` or `Commercials`
+directories (e.g. `Shows/Season 1`). The player will automatically search these
+subfolders for media files.
+
 ## Windows
 
 Open PowerShell and execute:
