@@ -41,7 +41,7 @@ if sys.platform.startswith('linux'):
 from PyQt5 import QtCore
 from PyQt5.QtCore import (Qt, QTimer, QUrl, QSettings, qInstallMessageHandler,
                          QtMsgType, QMessageLogContext, pyqtSignal, QObject, QThread, QSize)
-from PyQt5.QtGui import QColor, QKeySequence, QPalette, QFont, QMovie, QPixmap, QIcon
+from PyQt5.QtGui import QColor, QKeySequence, QPalette, QFont, QMovie, QPixmap, QIcon, QKeyEvent
 from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
 from PyQt5.QtMultimediaWidgets import QVideoWidget
 from PyQt5.QtWidgets import (
@@ -475,6 +475,14 @@ class FlaskServerManager(QObject):
 
     <button class="btn" onclick="send('next_channel')">[CH+] CHANNEL UP</button>
     <button class="btn" onclick="send('prev_channel')">[CH-] CHANNEL DOWN</button>
+
+    <div class="volume-row">
+        <button class="btn vol-btn small" onclick="send('cursor_up')">[^] UP</button>
+        <button class="btn vol-btn small" onclick="send('cursor_ok')">[OK]</button>
+        <button class="btn vol-btn small" onclick="send('cursor_down')">[v] DOWN</button>
+        <button class="btn vol-btn small" onclick="send('cursor_left')">[<] LEFT</button>
+        <button class="btn vol-btn small" onclick="send('cursor_right')">[>] RIGHT</button>
+    </div>
 
     <div class="volume-group">
         <div class="volume-title">[VOL] VOLUME MATRIX</div>
@@ -1274,6 +1282,7 @@ class NetworkEditor(QMainWindow):
         self.content_tree.setAlternatingRowColors(True)
         self.content_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.content_tree.customContextMenuRequested.connect(self.show_content_context_menu)
+        self.content_tree.setSelectionMode(QTreeWidget.ExtendedSelection)
         self.content_tree.setRootIsDecorated(False)
         self.content_tree.setUniformRowHeights(True)
         
@@ -1562,32 +1571,42 @@ class NetworkEditor(QMainWindow):
     
     def show_content_context_menu(self, position):
         """Show context menu for content tree."""
-        item = self.content_tree.itemAt(position)
-        if not item:
+        selected_items = self.content_tree.selectedItems()
+        if not selected_items:
+            item = self.content_tree.itemAt(position)
+            if not item:
+                return
+            selected_items = [item]
+
+        files = [it.data(0, Qt.UserRole) for it in selected_items if it.data(0, Qt.UserRole)]
+        if not files:
             return
-        
-        file_path = item.data(0, Qt.UserRole)
-        if not file_path:
-            return
-        
+
         menu = QMenu(self)
-        
+
         # Move to submenu (only show if there are other channels)
         channels = discover_channels(ROOT_CHANNELS)
         other_channels = [ch for ch in channels if ch != self.current_channel]
-        
+
         if other_channels:
             send_menu = menu.addMenu("[MOV] Move to...")
             for channel in other_channels:
-                send_menu.addAction(channel.name, 
-                    lambda checked, ch=channel: self.move_file_to_channel(file_path, ch))
+                send_menu.addAction(channel.name,
+                    lambda checked, ch=channel: self.move_files_to_channel(files, ch))
+        if other_channels:
+            copy_menu = menu.addMenu("[CPY] Copy to...")
+            for channel in other_channels:
+                copy_menu.addAction(channel.name,
+                    lambda checked, ch=channel: self.copy_files_to_channel(files, ch))
             menu.addSeparator()
-        
+
         # File operations
-        menu.addAction("[REN] Rename", lambda: self.rename_file(file_path))
-        menu.addAction("[INFO] Info", lambda: self.show_file_info(file_path))
+        if len(files) == 1:
+            file_path = files[0]
+            menu.addAction("[REN] Rename", lambda: self.rename_file(file_path))
+            menu.addAction("[INFO] Info", lambda: self.show_file_info(file_path))
         menu.addSeparator()
-        menu.addAction("[DEL] Delete", lambda: self.delete_file(file_path))
+        menu.addAction("[DEL] Delete", lambda: [self.delete_file(f) for f in files])
         
         menu.exec_(self.content_tree.mapToGlobal(position))
     
@@ -1656,6 +1675,23 @@ class NetworkEditor(QMainWindow):
         except Exception as e:
             logging.error(f"Failed to move file: {e}")
             QMessageBox.critical(self, "[ERR] Error", f"Failed to move file:\n{e}")
+
+    def move_files_to_channel(self, files: List[Path], target_channel: Path):
+        for f in files:
+            self.move_file_to_channel(f, target_channel)
+
+    def copy_files_to_channel(self, files: List[Path], target_channel: Path):
+        for f in files:
+            try:
+                dest_dir = target_channel / ("Shows" if f.parent.name == "Shows" else "Commercials")
+                if not dest_dir.exists():
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                dest = dest_dir / f.name
+                if dest.exists():
+                    continue
+                shutil.copy2(str(f), str(dest))
+            except Exception as e:
+                logging.error(f"Copy failed for {f}: {e}")
     
     def rename_file(self, file_path: Path):
         """Rename a file."""
@@ -1975,6 +2011,14 @@ class GuideWidget(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
+
+        header = QHBoxLayout()
+        header.addStretch()
+        self.remote_label = QLabel("REMOTE: ?")
+        self.net_label = QLabel("NET: ?")
+        header.addWidget(self.remote_label)
+        header.addWidget(self.net_label)
+        main_layout.addLayout(header)
         
         # WIP Panel - Enhanced version
         wip_panel = QGroupBox("[NEXT] Upcoming Shows")
@@ -2024,6 +2068,23 @@ class GuideWidget(QWidget):
         self.now_playing_timer = QTimer(self)
         self.now_playing_timer.timeout.connect(self._update_now_playing)
         self.now_playing_timer.start(60000)  # 1 minute
+
+    def update_status_indicators(self):
+        """Update remote and internet status indicators."""
+        remote_ok = self.tv.flask_manager.is_running
+        remote_color = "#00ff00" if remote_ok else "#ff0000"
+        self.remote_label.setText("REMOTE" + (" OK" if remote_ok else " OFF"))
+        self.remote_label.setStyleSheet(f"color: {remote_color}")
+
+        connected = False
+        try:
+            socket.create_connection(("8.8.8.8", 53), timeout=2).close()
+            connected = True
+        except Exception:
+            connected = False
+        net_color = "#00ff00" if connected else "#ff0000"
+        self.net_label.setText("NET" + (" OK" if connected else " OFF"))
+        self.net_label.setStyleSheet(f"color: {net_color}")
 
     def _apply_zoom(self):
         """Apply zoom settings to table headers and icons."""
@@ -2740,6 +2801,35 @@ class DevRemote(QWidget):
             
         self.setFixedHeight(50)
 
+class CursorController(QObject):
+    """Simple cursor controller for remote navigation."""
+    def __init__(self, tv: 'TVPlayer'):
+        super().__init__(tv)
+        self.tv = tv
+
+    def _send(self, key):
+        widget = QApplication.focusWidget()
+        if widget:
+            press = QKeyEvent(QtCore.QEvent.KeyPress, key, Qt.NoModifier)
+            release = QKeyEvent(QtCore.QEvent.KeyRelease, key, Qt.NoModifier)
+            QApplication.postEvent(widget, press)
+            QApplication.postEvent(widget, release)
+
+    def up(self):
+        self._send(Qt.Key_Up)
+
+    def down(self):
+        self._send(Qt.Key_Down)
+
+    def left(self):
+        self._send(Qt.Key_Left)
+
+    def right(self):
+        self._send(Qt.Key_Right)
+
+    def select(self):
+        self._send(Qt.Key_Return)
+
 # ───────────── MAIN TV PLAYER CLASS - ENHANCED AND COMPLETE ─────────────
 class TVPlayer(QMainWindow):
     DEFAULT_KEYS = {
@@ -2765,7 +2855,9 @@ class TVPlayer(QMainWindow):
         "channels_dir": str(ROOT_CHANNELS),
         "web_port": 5050,
         "cache_file": str(DEFAULT_CACHE_FILE),
-        "hotkey_file": str(DEFAULT_HOTKEY_FILE)
+        "hotkey_file": str(DEFAULT_HOTKEY_FILE),
+        "load_last_folder": True,
+        "recent_channels": "[]"
     }
 
     def __init__(self):
@@ -2776,9 +2868,7 @@ class TVPlayer(QMainWindow):
 
         # Load settings and cache
         self.settings = self._load_settings()
-        global ROOT_CHANNELS
-        ROOT_CHANNELS = Path(self.settings.get("channels_dir", str(ROOT_CHANNELS)))
-        ROOT_CHANNELS.mkdir(exist_ok=True)
+        self._auto_select_channels_folder()
         self.cache_file = Path(self.settings.get("cache_file", str(DEFAULT_CACHE_FILE)))
         self.hotkey_file = Path(self.settings.get("hotkey_file", str(DEFAULT_HOTKEY_FILE)))
         self.durations = self._load_cache()
@@ -2796,6 +2886,7 @@ class TVPlayer(QMainWindow):
 
         # Flask server manager
         self.flask_manager = FlaskServerManager(self)
+        self.cursor = CursorController(self)
 
         # Channel discovery
         self.channels_real = discover_channels(ROOT_CHANNELS)
@@ -3015,16 +3106,19 @@ class TVPlayer(QMainWindow):
         # Show IP info dialog
         ip_dialog = IPInfoDialog(port, self)
         ip_dialog.exec_()
+        self.guide.update_status_indicators()
         
     def start_web_server(self):
         """Start the web server."""
         port = self.settings.get("web_port", 5050)
         self.flask_manager.start_server(port)
+        self.guide.update_status_indicators()
         
     def restart_web_server(self):
         """Restart the web server (called from remote)."""
         QTimer.singleShot(100, lambda: self.flask_manager.restart_server())
         self._osd("Web Server Restarting...")
+        QTimer.singleShot(500, self.guide.update_status_indicators)
 
     def get_all_media_for_api(self) -> List[Dict]:
         """Get all media files for the API."""
@@ -3139,7 +3233,12 @@ class TVPlayer(QMainWindow):
                 "ondemand": self.go_ondemand,
                 "volume_up": self.vol_up,
                 "volume_down": self.vol_down,
-                "mute": self.mute
+                "mute": self.mute,
+                "cursor_up": self.cursor.up,
+                "cursor_down": self.cursor.down,
+                "cursor_left": self.cursor.left,
+                "cursor_right": self.cursor.right,
+                "cursor_ok": self.cursor.select
             }
             
             if cmd in commands:
@@ -3630,6 +3729,7 @@ class TVPlayer(QMainWindow):
             self.change_channel(-self.ch_idx)
         else:
             self._osd("Already viewing TV Guide")
+        self.guide.update_status_indicators()
 
     def go_last_channel(self):
         """Go to the last watched channel."""
@@ -3678,6 +3778,11 @@ class TVPlayer(QMainWindow):
                 result[key] = str(value).lower() == 'true'
             elif isinstance(default, int):
                 result[key] = int(value)
+            elif key == "recent_channels":
+                try:
+                    result[key] = json.loads(str(value))
+                except Exception:
+                    result[key] = []
             else:
                 result[key] = str(value)
         
@@ -3687,7 +3792,46 @@ class TVPlayer(QMainWindow):
         """Save application settings."""
         settings = QSettings("TVStation", "LiveTV")
         for key, value in self.settings.items():
-            settings.setValue(key, str(value) if not isinstance(value, bool) else value)
+            if key == "recent_channels":
+                settings.setValue(key, json.dumps(value))
+            else:
+                settings.setValue(key, str(value) if not isinstance(value, bool) else value)
+
+    def _auto_select_channels_folder(self):
+        """Select appropriate channels folder based on settings."""
+        global ROOT_CHANNELS
+        ROOT_CHANNELS = Path(self.settings.get("channels_dir", str(ROOT_CHANNELS)))
+        if self.settings.get("load_last_folder", True):
+            recents = self.settings.get("recent_channels", [])
+            for path in recents:
+                logging.info(f"Trying channels folder: {path}")
+                p = Path(path)
+                if (p / "Shows").exists() and (p / "Commercials").exists():
+                    ROOT_CHANNELS = p
+                    break
+            else:
+                logging.info("No saved channels folder found, using default")
+        ROOT_CHANNELS.mkdir(exist_ok=True)
+
+    def _update_recent_channels(self, folder: str):
+        """Add folder to recent channels list and save settings."""
+        recents = self.settings.get("recent_channels", [])
+        if folder in recents:
+            recents.remove(folder)
+        recents.insert(0, folder)
+        self.settings["recent_channels"] = recents[:5]
+        self.settings["channels_dir"] = folder
+        self._save_settings()
+        self._populate_recent_menu()
+
+    def _populate_recent_menu(self):
+        """Populate the recent channels submenu."""
+        if not hasattr(self, "recent_menu"):
+            return
+        self.recent_menu.clear()
+        for path in self.settings.get("recent_channels", []):
+            name = Path(path).name
+            self.recent_menu.addAction(name, lambda checked, p=path: self.load_channels_folder(p))
 
     def _find_logo(self, channel: Path) -> Optional[str]:
         """Find channel logo file."""
@@ -4194,6 +4338,8 @@ class TVPlayer(QMainWindow):
         file_menu = menubar.addMenu("&Content")
         file_menu.addAction("[OPEN] &Open Channels Folder", self.open_channels_folder, "Ctrl+O")
         file_menu.addAction("[SELECT] &Select Channels Folder...", self.select_channels_folder)
+        self.recent_menu = file_menu.addMenu("[RECENT] Recent Folders")
+        self._populate_recent_menu()
         file_menu.addSeparator()
         file_menu.addAction("[EDIT] &TV Network Editor", self.show_network_editor, "Ctrl+E")
         file_menu.addSeparator()
@@ -4411,10 +4557,16 @@ class TVPlayer(QMainWindow):
         )
         
         if folder:
-            ROOT_CHANNELS = Path(folder)
-            self.reload_channels()
-            self._osd(f"Channels folder changed to: {ROOT_CHANNELS.name}")
-            logging.info(f"Channels folder changed to: {ROOT_CHANNELS}")
+            self.load_channels_folder(folder)
+
+    def load_channels_folder(self, folder: str):
+        """Load a channels folder and remember it."""
+        global ROOT_CHANNELS
+        ROOT_CHANNELS = Path(folder)
+        self.reload_channels()
+        self._update_recent_channels(folder)
+        self._osd(f"Channels folder changed to: {ROOT_CHANNELS.name}")
+        logging.info(f"Channels folder changed to: {ROOT_CHANNELS}")
 
     def reload_channels(self):
         """Reload channel list and rebuild synchronized schedules."""
