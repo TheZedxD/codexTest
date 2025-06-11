@@ -79,8 +79,12 @@ SUB_EXTS = (".srt", ".ass", ".vtt")
 ROOT_DIR = Path(__file__).resolve().parent
 ROOT_CHANNELS = ROOT_DIR / "Channels"
 ROOT_CHANNELS.mkdir(exist_ok=True)
-CACHE_FILE = ROOT_DIR / "durations.json"
-HOTKEY_FILE = ROOT_DIR / "hotkeys.json"
+
+# Default data files (can be changed in settings)
+DEFAULT_CACHE_FILE = ROOT_DIR / "durations.json"
+DEFAULT_HOTKEY_FILE = ROOT_DIR / "hotkeys.json"
+CACHE_FILE = DEFAULT_CACHE_FILE  # backward compatibility
+HOTKEY_FILE = DEFAULT_HOTKEY_FILE
 STATIC_GIF = ROOT_DIR / "static.gif"
 SCHEDULE_DIR = ROOT_DIR / "schedules"
 SCHEDULE_DIR.mkdir(exist_ok=True)
@@ -186,7 +190,8 @@ def parse_srt(path: Path) -> List[Tuple[int,int,str]]:
                 try:
                     a, b = line.split("-->")
                     start, end = _t2ms(_TIMERE.search(a)), _t2ms(_TIMERE.search(b))
-                except:
+                except Exception as e:
+                    logging.debug(f"Invalid subtitle timing line '{line}': {e}")
                     continue
             elif start is not None:
                 txt.append(line.strip())
@@ -195,6 +200,19 @@ def parse_srt(path: Path) -> List[Tuple[int,int,str]]:
     except Exception as e:
         logging.warning("Failed to parse SRT file %s: %s", path, e)
     return cues
+
+# ───────────── File Manager Helper ──────────────────
+def open_in_file_manager(path: Path):
+    """Open a path in the system file manager."""
+    try:
+        if platform.system() == "Windows":
+            subprocess.run(["explorer", str(path)], check=True)
+        elif platform.system() == "Darwin":
+            subprocess.run(["open", str(path)], check=True)
+        else:
+            subprocess.run(["xdg-open", str(path)], check=True)
+    except Exception as e:
+        logging.error(f"Failed to open file manager: {e}")
 
 # ───────────── Enhanced Signal bridge ──────────────────────────────────────
 class RemoteSignalBridge(QObject):
@@ -303,8 +321,8 @@ class IPInfoDialog(QDialog):
             s.close()
             if main_ip not in ips:
                 ips.append(main_ip)
-        except:
-            pass
+        except Exception as e:
+            logging.warning(f"IP detection error: {e}")
         
         # Try to get all IPs
         try:
@@ -312,8 +330,8 @@ class IPInfoDialog(QDialog):
             for ip in socket.gethostbyname_ex(hostname)[2]:
                 if ip not in ips and not ip.startswith("127."):
                     ips.append(ip)
-        except:
-            pass
+        except Exception as e:
+            logging.warning(f"IP detection error: {e}")
             
         return ips
 
@@ -826,7 +844,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("[SET] Television Settings")
         self.setModal(True)
-        self.resize(450, 350)
+        self.resize(500, 420)
         
         # Apply Matrix theme
         self.setStyleSheet("""
@@ -939,12 +957,34 @@ class SettingsDialog(QDialog):
         # Advanced Settings Group
         advanced_group = QGroupBox("[ADV] Advanced")
         advanced_layout = QFormLayout(advanced_group)
-        
+
         self.cache_clear = QPushButton("[CLR] Clear Duration Cache")
         self.cache_clear.clicked.connect(self._clear_cache)
         advanced_layout.addRow(self.cache_clear)
-        
+
         layout.addWidget(advanced_group)
+
+        # File Locations
+        file_group = QGroupBox("[FILES] Data Files")
+        file_layout = QFormLayout(file_group)
+
+        self.cache_edit = QLineEdit(s.get("cache_file", str(DEFAULT_CACHE_FILE)))
+        browse_cache = QPushButton("[...]")
+        browse_cache.clicked.connect(lambda: self._browse_file(self.cache_edit))
+        cache_row = QHBoxLayout()
+        cache_row.addWidget(self.cache_edit)
+        cache_row.addWidget(browse_cache)
+        file_layout.addRow("Cache File:", cache_row)
+
+        self.hotkey_edit = QLineEdit(s.get("hotkey_file", str(DEFAULT_HOTKEY_FILE)))
+        browse_hot = QPushButton("[...]")
+        browse_hot.clicked.connect(lambda: self._browse_file(self.hotkey_edit))
+        hot_row = QHBoxLayout()
+        hot_row.addWidget(self.hotkey_edit)
+        hot_row.addWidget(browse_hot)
+        file_layout.addRow("Hotkey File:", hot_row)
+
+        layout.addWidget(file_group)
         
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
@@ -954,11 +994,17 @@ class SettingsDialog(QDialog):
         
     def _clear_cache(self):
         try:
-            if CACHE_FILE.exists():
-                CACHE_FILE.unlink()
+            cache_path = Path(self.parent().cache_file)
+            if cache_path.exists():
+                cache_path.unlink()
             QMessageBox.information(self, "[OK] Cache Cleared", "Duration cache has been cleared.")
         except Exception as e:
             QMessageBox.warning(self, "[ERR] Error", f"Failed to clear cache: {e}")
+
+    def _browse_file(self, edit: QLineEdit):
+        path, _ = QFileDialog.getSaveFileName(self, "Select File", edit.text(), "JSON Files (*.json)")
+        if path:
+            edit.setText(path)
         
     def result(self) -> Dict:
         return {
@@ -966,7 +1012,9 @@ class SettingsDialog(QDialog):
             "subtitle_size": self.sub_sz.value(),
             "static_fx": self.chk_stat.isChecked(),
             "min_show_minutes": self.min_show_len.value(),
-            "web_port": self.web_port.value()
+            "web_port": self.web_port.value(),
+            "cache_file": self.cache_edit.text(),
+            "hotkey_file": self.hotkey_edit.text()
         }
 
 # ───────────── Hot-key dialog ─────────────
@@ -1805,15 +1853,7 @@ class NetworkEditor(QMainWindow):
     
     def _open_in_file_manager(self, path: Path):
         """Open a path in the system file manager."""
-        try:
-            if platform.system() == "Windows":
-                subprocess.run(["explorer", str(path)], check=True)
-            elif platform.system() == "Darwin":
-                subprocess.run(["open", str(path)], check=True)
-            else:
-                subprocess.run(["xdg-open", str(path)], check=True)
-        except Exception as e:
-            logging.error(f"Failed to open file manager: {e}")
+        open_in_file_manager(path)
 
 # ───────────── Guide widget ─────────────
 class GuideWidget(QWidget):
@@ -2132,12 +2172,39 @@ class GuideWidget(QWidget):
             start_time = data['start']
             duration = ms_to_hms(data['duration'])
             
-            info_text = f"[PROG] Program: {program_name}\n"
-            info_text += f"[TIME] Start: {start_time.strftime('%a %H:%M')}\n"
-            info_text += f"[DUR] Duration: {duration}\n"
-            info_text += f"[CH] Channel: {data['channel'].name}"
-            
-            QMessageBox.information(self, "[INFO] Program Info", info_text)
+            info_text = (
+                f"<b>{program_name}</b><br>"
+                f"Start: {start_time.strftime('%a %H:%M')}<br>"
+                f"Duration: {duration}<br>"
+                f"Channel: {data['channel'].name}"
+            )
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle("[INFO] Program Info")
+            dlg_layout = QVBoxLayout(dialog)
+
+            logo = self.tv.channel_logo.get(data['channel'])
+            if logo:
+                icon_lbl = QLabel()
+                icon_lbl.setPixmap(QPixmap(logo).scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                icon_lbl.setAlignment(Qt.AlignCenter)
+                dlg_layout.addWidget(icon_lbl)
+
+            lbl = QLabel(info_text)
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("font-size: 16px;")
+            dlg_layout.addWidget(lbl)
+
+            btn_row = QHBoxLayout()
+            open_btn = QPushButton("[OPEN]")
+            open_btn.clicked.connect(lambda: open_in_file_manager(Path(data['path']).parent))
+            close_btn = QPushButton("[OK]")
+            close_btn.clicked.connect(dialog.accept)
+            btn_row.addWidget(open_btn)
+            btn_row.addWidget(close_btn)
+            dlg_layout.addLayout(btn_row)
+
+            dialog.exec_()
     
     def _show_context_menu(self, position):
         """Show right-click context menu."""
@@ -2649,7 +2716,9 @@ class TVPlayer(QMainWindow):
         "subtitle_size": 24,
         "static_fx": True,
         "min_show_minutes": 5,
-        "web_port": 5050
+        "web_port": 5050,
+        "cache_file": str(DEFAULT_CACHE_FILE),
+        "hotkey_file": str(DEFAULT_HOTKEY_FILE)
     }
 
     def __init__(self):
@@ -2660,6 +2729,8 @@ class TVPlayer(QMainWindow):
 
         # Load settings and cache
         self.settings = self._load_settings()
+        self.cache_file = Path(self.settings.get("cache_file", str(DEFAULT_CACHE_FILE)))
+        self.hotkey_file = Path(self.settings.get("hotkey_file", str(DEFAULT_HOTKEY_FILE)))
         self.durations = self._load_cache()
         self.last_ch_idx: Optional[int] = None
 
@@ -3276,16 +3347,16 @@ class TVPlayer(QMainWindow):
             # Disconnect this handler
             try:
                 self.player.mediaStatusChanged.disconnect(self._on_media_loaded_for_seek)
-            except:
-                pass
+            except Exception as e:
+                logging.debug(f"Disconnect error: {e}")
         elif status in [QMediaPlayer.InvalidMedia, QMediaPlayer.UnknownMediaStatus]:
             logging.error(f"Failed to load media, status: {status}")
             if hasattr(self, '_pending_seek'):
                 delattr(self, '_pending_seek')
             try:
                 self.player.mediaStatusChanged.disconnect(self._on_media_loaded_for_seek)
-            except:
-                pass
+            except Exception as e:
+                logging.debug(f"Disconnect error: {e}")
 
     def _on_segment_end_enhanced(self):
         """Enhanced segment end handling - maintain live TV timing."""
@@ -3523,16 +3594,17 @@ class TVPlayer(QMainWindow):
     def _load_cache(self) -> Dict[str, int]:
         """Load duration cache."""
         try:
-            with open(CACHE_FILE, 'r') as f:
+            with open(self.cache_file, 'r') as f:
                 data = json.load(f)
                 return {k: int(v) for k, v in data.items() if isinstance(v, (int, float))}
-        except:
+        except Exception as e:
+            logging.warning(f"Failed to load cache: {e}")
             return {}
 
     def _save_cache(self):
         """Save duration cache."""
         try:
-            with open(CACHE_FILE, 'w') as f:
+            with open(self.cache_file, 'w') as f:
                 json.dump(self.durations, f, indent=2)
         except Exception as e:
             logging.warning(f"Failed to save cache: {e}")
@@ -3548,6 +3620,8 @@ class TVPlayer(QMainWindow):
                 result[key] = str(value).lower() == 'true'
             elif isinstance(default, int):
                 result[key] = int(value)
+            else:
+                result[key] = str(value)
         
         return result
 
@@ -3555,7 +3629,7 @@ class TVPlayer(QMainWindow):
         """Save application settings."""
         settings = QSettings("TVStation", "LiveTV")
         for key, value in self.settings.items():
-            settings.setValue(key, value)
+            settings.setValue(key, str(value) if not isinstance(value, bool) else value)
 
     def _find_logo(self, channel: Path) -> Optional[str]:
         """Find channel logo file."""
@@ -3576,16 +3650,17 @@ class TVPlayer(QMainWindow):
     def _load_hotkeys(self) -> Dict[str, str]:
         """Load hotkey configuration."""
         try:
-            with open(HOTKEY_FILE, 'r') as f:
+            with open(self.hotkey_file, 'r') as f:
                 saved = json.load(f)
                 return {**self.DEFAULT_KEYS, **saved}
-        except:
+        except Exception as e:
+            logging.warning(f"Failed to load hotkeys: {e}")
             return self.DEFAULT_KEYS.copy()
 
     def _save_hotkeys(self):
         """Save hotkey configuration."""
         try:
-            with open(HOTKEY_FILE, 'w') as f:
+            with open(self.hotkey_file, 'w') as f:
                 json.dump(self.hotkeys, f, indent=2)
         except Exception as e:
             logging.warning(f"Failed to save hotkeys: {e}")
@@ -3867,7 +3942,12 @@ class TVPlayer(QMainWindow):
         if dialog.exec_() == QDialog.Accepted:
             old_settings = self.settings.copy()
             self.settings.update(dialog.result())
+            self.cache_file = Path(self.settings.get("cache_file", str(DEFAULT_CACHE_FILE)))
+            self.hotkey_file = Path(self.settings.get("hotkey_file", str(DEFAULT_HOTKEY_FILE)))
             self._save_settings()
+            self.durations = self._load_cache()
+            self.hotkeys = self._load_hotkeys()
+            self._bind_keys()
             
             # Apply volume immediately
             self.player.setVolume(self.settings["default_volume"])
@@ -4250,16 +4330,11 @@ class TVPlayer(QMainWindow):
     def open_channels_folder(self):
         """Open the channels folder in the system file explorer."""
         try:
-            if platform.system() == "Windows":
-                subprocess.run(["explorer", str(ROOT_CHANNELS)], check=True)
-            elif platform.system() == "Darwin":
-                subprocess.run(["open", str(ROOT_CHANNELS)], check=True)
-            else:
-                subprocess.run(["xdg-open", str(ROOT_CHANNELS)], check=True)
+            open_in_file_manager(ROOT_CHANNELS)
             logging.info(f"Opened channels folder: {ROOT_CHANNELS}")
         except Exception as e:
             logging.error(f"Failed to open channels folder: {e}")
-            QMessageBox.warning(self, "[ERR] Error", 
+            QMessageBox.warning(self, "[ERR] Error",
                 f"Could not open channels folder.\nLocation: {ROOT_CHANNELS}\n\nError: {e}")
 
     def select_channels_folder(self):
