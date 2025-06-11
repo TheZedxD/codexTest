@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+GREEN="\e[32m"
+RESET="\e[0m"
 echo "=== TVPlayer Installer (Linux) ==="
 
 # Check for Python 3
@@ -33,21 +35,26 @@ if ! command -v ffprobe >/dev/null; then
 fi
 
 echo "Installing Python packages..."
-pip3 install --user -r requirements.txt
+if pip3 install --user -r requirements.txt; then
+    pkg_ok=true
+else
+    pkg_ok=false
+fi
 
 CHANNELS_DIR="$(pwd)/Channels"
 echo "Creating folder structure under $CHANNELS_DIR"
 mkdir -p "$CHANNELS_DIR/Channel1/Shows" "$CHANNELS_DIR/Channel1/Commercials"
 mkdir -p "schedules" "logs"
+dir_ok=true
 
-read -p "Do you have media files to add now? [y/N]: " add
-if [[ "$add" =~ ^[Yy]$ ]]; then
-    read -p "Path to your video files for Channel1/Shows: " mpath
-    if [ -d "$mpath" ]; then
-        cp -n "$mpath"/* "$CHANNELS_DIR/Channel1/Shows" 2>/dev/null || true
-    else
-        echo "Directory not found, skipping copy."
-    fi
+read -p "Enter the path to your media folder to create Channel1 with no commercials (leave blank to skip): " mpath
+if [ -n "$mpath" ] && [ -d "$mpath" ]; then
+    cp -n "$mpath"/* "$CHANNELS_DIR/Channel1/Shows" 2>/dev/null || true
 fi
+copy_ok=true
 
-echo "Installation complete. Run with: python3 'TVPlayer_Complete copy.py'"
+echo
+if [ "$pkg_ok" = true ]; then echo -e "${GREEN}[✓] Python packages installed${RESET}"; fi
+if [ "$dir_ok" = true ]; then echo -e "${GREEN}[✓] Folder structure created${RESET}"; fi
+if [ "$copy_ok" = true ]; then echo -e "${GREEN}[✓] Media setup complete${RESET}"; fi
+echo -e "${GREEN}[✓] Installation complete. Run with: python3 'TVPlayer_Complete copy.py'${RESET}"

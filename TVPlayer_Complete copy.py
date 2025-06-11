@@ -39,8 +39,8 @@ if sys.platform.startswith('linux'):
 
 # FIXED: Import QtCore properly - import the module itself, not from itself
 from PyQt5 import QtCore
-from PyQt5.QtCore import (Qt, QTimer, QUrl, QSettings, qInstallMessageHandler, 
-                         QtMsgType, QMessageLogContext, pyqtSignal, QObject, QThread)
+from PyQt5.QtCore import (Qt, QTimer, QUrl, QSettings, qInstallMessageHandler,
+                         QtMsgType, QMessageLogContext, pyqtSignal, QObject, QThread, QSize)
 from PyQt5.QtGui import QColor, QKeySequence, QPalette, QFont, QMovie, QPixmap, QIcon
 from PyQt5.QtMultimedia import QMediaContent, QMediaPlayer
 from PyQt5.QtMultimediaWidgets import QVideoWidget
@@ -1908,10 +1908,18 @@ class GuideWidget(QWidget):
         
         # Headers
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.table.horizontalHeader().setDefaultSectionSize(120)
+        self.base_col_size = 120
+        self.table.horizontalHeader().setDefaultSectionSize(self.base_col_size)
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.table.verticalHeader().setDefaultSectionSize(40)
-        
+        self.base_row_size = 60  # larger rows for bigger icons
+        self.table.verticalHeader().setDefaultSectionSize(self.base_row_size)
+        self.base_icon_size = 48
+        self.table.setIconSize(QSize(self.base_icon_size, self.base_icon_size))
+
+        self.zoom_level = 0
+        self.max_zoom_level = 3
+        self._apply_zoom()
+
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.cellClicked.connect(self._on_cell_clicked)
@@ -1934,6 +1942,32 @@ class GuideWidget(QWidget):
         self.now_playing_timer = QTimer(self)
         self.now_playing_timer.timeout.connect(self._update_now_playing)
         self.now_playing_timer.start(60000)  # 1 minute
+
+    def _apply_zoom(self):
+        """Apply zoom settings to table headers and icons."""
+        scale = 1 + self.zoom_level * 0.25
+        self.table.horizontalHeader().setDefaultSectionSize(int(self.base_col_size * scale))
+        self.table.verticalHeader().setDefaultSectionSize(int(self.base_row_size * scale))
+        size = int(self.base_icon_size * scale)
+        self.table.setIconSize(QSize(size, size))
+
+    def zoom_in(self):
+        """Increase guide zoom level."""
+        if self.zoom_level < self.max_zoom_level:
+            self.zoom_level += 1
+            self.tv._show_loading("Zooming...")
+            self._apply_zoom()
+            self.refresh()
+            self.tv._hide_loading()
+
+    def zoom_out(self):
+        """Decrease guide zoom level (not below default)."""
+        if self.zoom_level > 0:
+            self.zoom_level -= 1
+            self.tv._show_loading("Zooming...")
+            self._apply_zoom()
+            self.refresh()
+            self.tv._hide_loading()
         
     def refresh(self):
         """Refresh the 12-hour TV guide."""
@@ -2058,17 +2092,17 @@ class GuideWidget(QWidget):
             # Colors
             if is_ad:
                 cell.setBackground(QColor("#ff4444" if is_current else "#cc0000"))
-                cell.setForeground(QColor("#ffffff"))
+                cell.setForeground(QColor("#ff0000") if is_current else QColor("#ffffff"))
             else:
                 show_key = Path(program_path).stem
                 if show_key not in show_colors:
                     show_colors[show_key] = self.COLORS[color_index % len(self.COLORS)]
                     color_index += 1
-                
+
                 base_color = show_colors[show_key]
                 if is_current:
                     cell.setBackground(base_color)
-                    cell.setForeground(QColor("#000000"))
+                    cell.setForeground(QColor("#ff0000"))
                 else:
                     cell.setBackground(base_color.darker(150))
                     cell.setForeground(QColor("#ffffff"))
@@ -2605,7 +2639,9 @@ class TVPlayer(QMainWindow):
         "reload_schedule": "Ctrl+R",
         "volume_up": "+", "volume_down": "-", "mute": "M",
         "toggle_subtitles": "S",
-        "ondemand": "0"
+        "ondemand": "0",
+        "guide_zoom_in": "Ctrl+=",
+        "guide_zoom_out": "Ctrl+-"
     }
     
     DEFAULT_SETTINGS = {
@@ -3576,7 +3612,9 @@ class TVPlayer(QMainWindow):
             "volume_down": self.vol_down,
             "mute": self.mute,
             "toggle_subtitles": self.tog_subs,
-            "ondemand": self.go_ondemand
+            "ondemand": self.go_ondemand,
+            "guide_zoom_in": self.guide.zoom_in,
+            "guide_zoom_out": self.guide.zoom_out
         }
         
         for action, sequence in self.hotkeys.items():
@@ -4029,6 +4067,11 @@ class TVPlayer(QMainWindow):
         av_menu.addSeparator()
         av_menu.addAction("[FULL] &Fullscreen", self.toggle_fs, "F11")
         av_menu.addAction("[INFO] Program &Info", self.toggle_info, "Ctrl+I")
+
+        # View Menu - zoom controls
+        view_menu = menubar.addMenu("&View")
+        view_menu.addAction("[ZOOM+] Zoom In", self.guide.zoom_in, "Ctrl+=")
+        view_menu.addAction("[ZOOM-] Zoom Out", self.guide.zoom_out, "Ctrl+-")
         
         # Tools Menu
         tools_menu = menubar.addMenu("&Tools")

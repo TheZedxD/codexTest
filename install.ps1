@@ -1,4 +1,6 @@
 Write-Host "=== TVPlayer Installer (Windows) ==="
+$green = "`e[32m"
+$reset = "`e[0m"
 
 # Check for Python
 $python = Get-Command python -ErrorAction SilentlyContinue
@@ -16,25 +18,31 @@ if (-not $pip) {
 
 Write-Host "Installing Python packages..."
 pip install -r requirements.txt
+$pkgOk = $?
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $channels = Join-Path $root 'Channels'
 $shows = Join-Path $channels 'Channel1\Shows'
 $commercials = Join-Path $channels 'Channel1\Commercials'
 
-New-Item -ItemType Directory -Force -Path $shows | Out-Null
-New-Item -ItemType Directory -Force -Path $commercials | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $root 'schedules') | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $root 'logs') | Out-Null
+$null = New-Item -ItemType Directory -Force -Path $shows
+$null = New-Item -ItemType Directory -Force -Path $commercials
+$null = New-Item -ItemType Directory -Force -Path (Join-Path $root 'schedules')
+$null = New-Item -ItemType Directory -Force -Path (Join-Path $root 'logs')
+$dirOk = $true
 
-$add = Read-Host 'Do you have media files to add now? (y/N)'
-if ($add -match '^[Yy]') {
-    $src = Read-Host 'Path to your video files for Channel1\\Shows'
+$src = Read-Host 'Enter path to your media folder for Channel1 (leave blank to skip)'
+if ($src) {
     if (Test-Path $src) {
         Copy-Item "$src\*" $shows -ErrorAction SilentlyContinue
     } else {
-        Write-Host 'Directory not found, skipping copy.'
+        Write-Host 'Directory not found. Skipping copy.'
     }
 }
+$copyOk = $true
 
-Write-Host "Installation complete. Run: python 'TVPlayer_Complete copy.py'"
+Write-Host ""
+if ($pkgOk) { Write-Host "$green[✓] Python packages installed$reset" }
+if ($dirOk) { Write-Host "$green[✓] Folder structure created$reset" }
+if ($copyOk) { Write-Host "$green[✓] Media setup complete$reset" }
+Write-Host "$green[✓] Installation complete. Run: python 'TVPlayer_Complete copy.py'$reset"
