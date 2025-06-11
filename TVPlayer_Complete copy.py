@@ -423,7 +423,7 @@ class FlaskServerManager(QObject):
 <!DOCTYPE html>
 <html>
 <head>
-    <title>TV Station Remote - Matrix Edition</title>
+    <title>Infinite Tv Remote</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
         :root{
@@ -440,13 +440,13 @@ class FlaskServerManager(QObject):
         h1{margin:20px 0;font-size:24px;text-shadow:var(--shadow);letter-spacing:2px}
         .status{background:var(--grid);border:2px solid var(--border);padding:10px;border-radius:6px;
                 font-weight:bold;box-shadow:var(--shadow);margin-bottom:20px;font-size:14px}
-        .btn{display:block;width:100%;max-width:300px;margin:8px auto;padding:16px;
-             font-size:18px;font-weight:bold;color:var(--fg);background:var(--grid);
+        .btn{display:block;width:90%;max-width:240px;margin:6px auto;padding:12px;
+             font-size:16px;font-weight:bold;color:var(--fg);background:var(--grid);
              border:2px solid var(--border);border-radius:8px;text-shadow:var(--shadow);
              transition:all .2s;cursor:pointer;letter-spacing:1px}
         .btn:hover{background:var(--grid-hover);transform:scale(1.02);box-shadow:var(--shadow)}
         .btn:active{background:var(--grid-active);transform:scale(0.98)}
-        .small{font-size:14px;padding:12px}
+        .small{font-size:13px;padding:8px}
         .volume-group{margin:20px 0;padding:15px;border:2px solid var(--border);border-radius:8px;
                       background:rgba(0,255,0,0.05)}
         .volume-title{margin-bottom:12px;font-size:16px;color:var(--fg);font-weight:bold;
@@ -468,7 +468,7 @@ class FlaskServerManager(QObject):
 </head>
 <body>
     <div class="matrix-bg"></div>
-    <h1>[TV] MATRIX TV CONTROL</h1>
+    <h1>[TV] INFINITE TV CONTROL</h1>
     <div class="status">[OK] SYSTEM ONLINE</div>
 
     <button class="btn" onclick="send('play')">[>] PLAY / PAUSE</button>
@@ -485,8 +485,6 @@ class FlaskServerManager(QObject):
         </div>
     </div>
 
-    <button class="btn small" onclick="send('next')">[>>] NEXT VIDEO</button>
-    <button class="btn small" onclick="send('prev')">[<<] PREV VIDEO</button>
 
     <button class="btn" onclick="send('guide')">[G] TV GUIDE</button>
     <button class="btn" onclick="send('ondemand')">[O] ON DEMAND</button>
@@ -568,7 +566,7 @@ setInterval(() => {
 <!DOCTYPE html>
 <html>
 <head>
-    <title>TV Station Media Matrix</title>
+    <title>Infinite Tv Media Browser</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
         * {box-sizing:border-box;margin:0;padding:0}
@@ -762,7 +760,7 @@ loadMedia();
 class Console(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent, Qt.Tool)
-        self.setWindowTitle("[LOG] TV Station Console")
+        self.setWindowTitle("[LOG] Infinite Tv Console")
         self.resize(900, 500)
         
         # Apply Matrix theme
@@ -842,7 +840,7 @@ class Console(QDialog):
 class SettingsDialog(QDialog):
     def __init__(self, s: Dict, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("[SET] Television Settings")
+        self.setWindowTitle("[SET] Infinite Tv Settings")
         self.setModal(True)
         self.resize(500, 420)
         
@@ -1116,7 +1114,7 @@ class NetworkEditor(QMainWindow):
     def __init__(self, tv_player: 'TVPlayer', parent=None):
         super().__init__(parent)
         self.tv = tv_player
-        self.setWindowTitle("[EDIT] TV Network Editor")
+        self.setWindowTitle("[EDIT] Infinite Tv Network Editor")
         self.resize(1200, 700)
         self.setWindowIcon(QIcon())
         
@@ -1199,10 +1197,17 @@ class NetworkEditor(QMainWindow):
         toolbar_layout.addWidget(self.remove_icon_btn)
         
         toolbar_layout.addStretch()
-        
+
         self.status_label = QLabel("[OK] Ready")
         self.status_label.setMaximumHeight(20)
         toolbar_layout.addWidget(self.status_label)
+
+        # Enlarged channel icon preview
+        self.icon_preview = QLabel()
+        self.icon_preview.setFixedSize(64, 64)
+        self.icon_preview.setScaledContents(True)
+        self.icon_preview.setStyleSheet("border:2px solid #00ff00")
+        toolbar_layout.addWidget(self.icon_preview)
         
         main_layout.addLayout(toolbar_layout)
         
@@ -1287,18 +1292,30 @@ class NetworkEditor(QMainWindow):
         
         # Compact status bar
         status_bar = self.statusBar()
-        status_bar.showMessage("[OK] TV Network Editor Ready")
+        status_bar.showMessage("[OK] Infinite Tv Network Editor Ready")
         status_bar.setMaximumHeight(20)
         
         # Initialize
         self.current_channel = None
         self.current_filter = "all"
         self.refresh_content()
+
+    def _update_icon_preview(self, channel: Optional[Path]):
+        """Show enlarged icon preview for selected channel."""
+        if channel:
+            logo = self.tv._find_logo(channel)
+            if logo:
+                pix = QPixmap(logo).scaled(64, 64, Qt.KeepAspectRatio,
+                                        Qt.SmoothTransformation)
+                self.icon_preview.setPixmap(pix)
+                return
+        self.icon_preview.clear()
     
     def refresh_content(self):
         """Refresh the channel list and content."""
         self.channel_tree.clear()
         self.content_tree.clear()
+        self._update_icon_preview(None)
         
         channels = discover_channels(ROOT_CHANNELS)
         
@@ -1324,9 +1341,11 @@ class NetworkEditor(QMainWindow):
             # Enable icon management buttons
             self.change_icon_btn.setEnabled(True)
             self.remove_icon_btn.setEnabled(True)
+            self._update_icon_preview(channel)
         else:
             self.change_icon_btn.setEnabled(False)
             self.remove_icon_btn.setEnabled(False)
+            self._update_icon_preview(None)
     
     def load_channel_content(self, channel: Path):
         """Load content for the selected channel."""
@@ -1499,7 +1518,8 @@ class NetworkEditor(QMainWindow):
                 
                 self.statusBar().showMessage(f"[OK] Icon updated for {channel.name}")
                 logging.info(f"Updated icon for {channel.name}: {target}")
-                
+                self._update_icon_preview(channel)
+
             except Exception as e:
                 logging.error(f"Failed to change icon: {e}")
                 QMessageBox.critical(self, "[ERR] Error", f"Failed to change icon:\n{e}")
@@ -1532,6 +1552,7 @@ class NetworkEditor(QMainWindow):
                 
                 self.statusBar().showMessage(f"[OK] Icon removed from {channel.name}")
                 logging.info(f"Removed icons from {channel.name}: {', '.join(removed_files)}")
+                self._update_icon_preview(channel)
             else:
                 self.statusBar().showMessage(f"[!] No icon found for {channel.name}")
                 
@@ -2749,7 +2770,7 @@ class TVPlayer(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("[TV] TV Station - Matrix Edition")
+        self.setWindowTitle("[TV] Infinite Tv")
         self.resize(1400, 800)
         self._apply_dark_theme()
 
@@ -2780,6 +2801,14 @@ class TVPlayer(QMainWindow):
         self.channels_real = discover_channels(ROOT_CHANNELS)
         self.channels = [None, "OnDemand"] + self.channels_real
         self._rebuild_logos()
+
+        # Use default channel icon as application icon
+        if self.channels_real:
+            logo = self._find_logo(self.channels_real[0])
+            if logo:
+                icon = QIcon(logo)
+                QApplication.instance().setWindowIcon(icon)
+                self.setWindowIcon(icon)
         self.ch_idx = 0
 
         # Enhanced media player setup with better error handling
@@ -2882,7 +2911,7 @@ class TVPlayer(QMainWindow):
             self.player.error.connect(lambda: self._on_player_error(self.player.error()))
 
         # Initialize and start web server
-        logging.info("TV Station Enhanced initialized - %d channels found", len(self.channels_real))
+        logging.info("Infinite Tv initialized - %d channels found", len(self.channels_real))
         logging.info("All channels synchronized to: %s", self.global_schedule_start.strftime('%Y-%m-%d %H:%M'))
         
         # Build initial schedules for all channels
@@ -4205,7 +4234,7 @@ class TVPlayer(QMainWindow):
         # Help Menu
         help_menu = menubar.addMenu("&Help")
         help_menu.addAction("[?] &Quick Help", self.show_quick_help, "F1")
-        help_menu.addAction("[i] &About TV Station", self.show_about)
+        help_menu.addAction("[i] &About Infinite Tv", self.show_about)
 
     def show_hotkeys(self):
         """Show hotkey configuration dialog."""
@@ -4218,7 +4247,7 @@ class TVPlayer(QMainWindow):
 
     def show_quick_help(self):
         """Show quick help dialog."""
-        help_text = """[TV] TV Station Matrix Edition - Quick Help
+        help_text = """[TV] Infinite Tv - Quick Help
 
 [BASIC] BASIC CONTROLS:
 • G - Open TV Guide  
@@ -4290,7 +4319,7 @@ class TVPlayer(QMainWindow):
     def show_about(self):
         """Show enhanced about dialog."""
         about_text = f"""
-<h2 style="color: #00ff00;">[TV] TV Station - Matrix Edition</h2>
+<h2 style="color: #00ff00;">[TV] Infinite Tv</h2>
 <p><b>Version:</b> r45-COMPLETE FIXED EDITION v4 - TRUE LIVE TV</p>
 <p><b>Release Date:</b> 2025-06-02</p>
 
@@ -4321,7 +4350,7 @@ class TVPlayer(QMainWindow):
 <li>[OK] 12-hour program guide showing live schedule</li>
 <li>[OK] OnDemand content browser</li>
 <li>[OK] Web Remote Server for mobile devices</li>
-<li>[OK] TV Network Editor with icon management</li>
+<li>[OK] Infinite Tv Network Editor with icon management</li>
 <li>[OK] Subtitle support</li>
 <li>[OK] Channel logos</li>
 </ul>
@@ -4333,11 +4362,11 @@ class TVPlayer(QMainWindow):
 <p><b>Schedule Start:</b> {self.global_schedule_start.strftime('%Y-%m-%d %H:%M')}</p>
 <p><b>Uptime:</b> {str(datetime.now() - self.startup_time).split('.')[0]}</p>
 
-<p style="color: #39ff14;"><b>[C] 2025 TV Station Project - True Live TV Edition</b></p>
+<p style="color: #39ff14;"><b>[C] 2025 Infinite Tv Project - True Live TV Edition</b></p>
         """
         
         msg = QMessageBox(self)
-        msg.setWindowTitle("[ABOUT] About TV Station Matrix")
+        msg.setWindowTitle("[ABOUT] About Infinite Tv")
         msg.setTextFormat(Qt.RichText)
         msg.setText(about_text)
         msg.setStyleSheet("""
@@ -4433,7 +4462,7 @@ class TVPlayer(QMainWindow):
     def closeEvent(self, event):
         """Enhanced close event with proper cleanup."""
         try:
-            logging.info("TV Station shutting down...")
+            logging.info("Infinite Tv shutting down...")
             
             # Stop Flask server
             if hasattr(self, 'flask_manager') and self.flask_manager.is_running:
@@ -4461,12 +4490,12 @@ class TVPlayer(QMainWindow):
 # ──────────────────────── MAIN ENTRY POINT ────────────────────────
 if __name__ == "__main__":
     try:
-        logging.info("[START] Starting TV Station - Matrix Edition (Fixed)")
+        logging.info("[START] Starting Infinite Tv")
         
         app = QApplication(sys.argv)
-        app.setApplicationName("TV Station Matrix")
+        app.setApplicationName("Infinite Tv")
         app.setApplicationVersion("r45-complete-fixed")
-        app.setOrganizationName("TV Station Project")
+        app.setOrganizationName("Infinite Tv Project")
         
         tv = TVPlayer()
         tv.show()
@@ -4474,7 +4503,7 @@ if __name__ == "__main__":
         exit_code = app.exec_()
         
     except Exception as e:
-        logging.exception("Fatal error in TV Station")
+        logging.exception("Fatal error in Infinite Tv")
         exit_code = 1
     
     sys.exit(exit_code)
