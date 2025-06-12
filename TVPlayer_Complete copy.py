@@ -4339,6 +4339,8 @@ class TVPlayer(QMainWindow):
             ch_menu.addAction(ch.name, lambda checked, i=idx: self._tray_switch_channel(i))
 
         self._tray_menu.addSeparator()
+        self._tray_menu.addAction("[MUTE] Mute/Unmute", lambda checked=False: self.mute())
+        self._tray_menu.addSeparator()
         self._tray_menu.addAction("[PREF] Preferences...", lambda checked=False: self.show_settings())
         self._tray_menu.addAction("[QUIT] Exit", lambda checked=False: self._exit_from_tray())
 
@@ -4365,6 +4367,8 @@ class TVPlayer(QMainWindow):
                 self.activateWindow()
 
     def _exit_from_tray(self):
+        if hasattr(self, "tray"):
+            self.tray.hide()
         self._tray_exit = True
         self.close()
 
@@ -5121,7 +5125,10 @@ class TVPlayer(QMainWindow):
             # Save data
             self._save_settings()
             self._save_cache()
-            
+
+            if hasattr(self, "tray"):
+                self.tray.hide()
+
             super().closeEvent(event)
             
         except Exception as e:
