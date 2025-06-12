@@ -55,6 +55,7 @@ from PyQt5.QtWidgets import (
     QListWidget, QListWidgetItem,
     QGraphicsDropShadowEffect
 )
+from functools import partial
 
 # Flask imports for web server
 from flask import Flask, request, jsonify, render_template_string
@@ -4336,7 +4337,8 @@ class TVPlayer(QMainWindow):
         self._tray_menu.addAction("OnDemand", lambda checked=False: self._tray_switch_channel(1))
         ch_menu = self._tray_menu.addMenu("Channels")
         for idx, ch in enumerate(self.channels[2:], start=2):
-            ch_menu.addAction(ch.name, lambda checked, i=idx: self._tray_switch_channel(i))
+            act = ch_menu.addAction(ch.name)
+            act.triggered.connect(partial(self._tray_switch_channel, idx))
 
         self._tray_menu.addSeparator()
         self._tray_menu.addAction("[MUTE] Mute/Unmute", lambda checked=False: self.mute())
