@@ -4331,15 +4331,15 @@ class TVPlayer(QMainWindow):
         self.tray = QSystemTrayIcon(icon, self)
         menu = QMenu()
 
-        menu.addAction("[GUIDE]", lambda: self._tray_switch_channel(0))
-        menu.addAction("OnDemand", lambda: self._tray_switch_channel(1))
+        menu.addAction("[GUIDE]", lambda checked=False: self._tray_switch_channel(0))
+        menu.addAction("OnDemand", lambda checked=False: self._tray_switch_channel(1))
         ch_menu = menu.addMenu("Channels")
         for idx, ch in enumerate(self.channels[2:], start=2):
             ch_menu.addAction(ch.name, lambda checked, i=idx: self._tray_switch_channel(i))
 
         menu.addSeparator()
-        menu.addAction("[PREF] Preferences...", self.show_settings)
-        menu.addAction("[QUIT] Exit", self._exit_from_tray)
+        menu.addAction("[PREF] Preferences...", lambda checked=False: self.show_settings())
+        menu.addAction("[QUIT] Exit", lambda checked=False: self._exit_from_tray())
 
         self.tray.setContextMenu(menu)
         self.tray.activated.connect(self._on_tray_activated)
