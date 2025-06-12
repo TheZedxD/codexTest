@@ -41,6 +41,12 @@ After installation launch the player with:
 python "TVPlayer_Complete copy.py"
 ```
 
+The application minimizes to the system tray while running. If a `logo.png`
+image is present in the program directory it will be used as the tray icon on
+both Windows and Linux. Right-click the icon for quick channel selection,
+access to preferences, or to exit the program. Closing the window simply hides
+it in the tray; use **Exit** from the tray menu to quit.
+
 When starting up or reloading schedules the player displays a short loading
 overlay while rebuilding the guide so the listings always match what is
 actually playing.

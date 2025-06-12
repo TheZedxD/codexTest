@@ -3137,17 +3137,23 @@ class TVPlayer(QMainWindow):
         "weather_location": "Norfolk",
         "load_last_folder": True,
         "recent_channels": "[]",
-        "use_all_commercials_channels": "[]"
+        "use_all_commercials_channels": "[]",
+        "window_width": 1400,
+        "window_height": 800
     }
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("[TV] Infinite Tv")
-        self.resize(1400, 800)
+        # Load settings before building UI
+        self.settings = self._load_settings()
+        width = int(self.settings.get("window_width", 1400))
+        height = int(self.settings.get("window_height", 800))
+        self.resize(width, height)
+        self._tray_exit = False
         self._apply_dark_theme()
 
         # Load settings and cache
-        self.settings = self._load_settings()
         self._auto_select_channels_folder()
         self.cache_file = Path(self.settings.get("cache_file", str(DEFAULT_CACHE_FILE)))
         self.hotkey_file = Path(self.settings.get("hotkey_file", str(DEFAULT_HOTKEY_FILE)))
@@ -3188,6 +3194,7 @@ class TVPlayer(QMainWindow):
                 QApplication.instance().setWindowIcon(icon)
                 self.setWindowIcon(icon)
         self.ch_idx = 0
+        self._create_tray_icon()
 
         # Enhanced media player setup with better error handling
         self.player = QMediaPlayer(None, QMediaPlayer.VideoSurface)
@@ -4290,6 +4297,54 @@ class TVPlayer(QMainWindow):
                 shortcut.setContext(Qt.ApplicationShortcut)
                 self._shortcuts.append(shortcut)
 
+    # ── SYSTEM TRAY INTEGRATION ──────────────────────────────────
+    def _create_tray_icon(self):
+        """Set up the system tray icon and menu."""
+        icon_path = ROOT_DIR / "logo.png"
+        icon = QIcon(str(icon_path)) if icon_path.exists() else self.windowIcon()
+
+        self.tray = QSystemTrayIcon(icon, self)
+        menu = QMenu()
+
+        for idx, ch in enumerate(self.channels):
+            if idx == 0:
+                title = "[GUIDE]"
+            elif idx == 1:
+                title = "OnDemand"
+            else:
+                title = ch.name
+            menu.addAction(title, lambda checked, i=idx: self._tray_switch_channel(i))
+
+        menu.addSeparator()
+        menu.addAction("[PREF] Preferences...", self.show_settings)
+        menu.addAction("[QUIT] Exit", self._exit_from_tray)
+
+        self.tray.setContextMenu(menu)
+        self.tray.activated.connect(self._on_tray_activated)
+        self.tray.show()
+
+    def _tray_switch_channel(self, idx: int):
+        """Switch channels from the tray menu."""
+        delta = idx - self.ch_idx
+        if delta:
+            self.change_channel(delta)
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.Trigger:
+            if self.isVisible():
+                self.hide()
+            else:
+                self.showNormal()
+                self.raise_()
+                self.activateWindow()
+
+    def _exit_from_tray(self):
+        self._tray_exit = True
+        self.close()
+
     # ── UI CONTROL METHODS ──────────────────────────────────
     def vol_up(self):
         """Increase volume."""
@@ -5012,6 +5067,18 @@ class TVPlayer(QMainWindow):
 
     def closeEvent(self, event):
         """Enhanced close event with proper cleanup."""
+        self.settings["window_width"] = self.width()
+        self.settings["window_height"] = self.height()
+
+        if not getattr(self, "_tray_exit", False):
+            event.ignore()
+            self.hide()
+            if hasattr(self, "tray"):
+                self.tray.showMessage("Infinite Tv", "Running in system tray.")
+            self._save_settings()
+            self._save_cache()
+            return
+
         try:
             logging.info("Infinite Tv shutting down...")
             
