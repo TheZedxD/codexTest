@@ -52,7 +52,7 @@ from PyQt5.QtWidgets import (
     QHeaderView, QMessageBox, QSpinBox, QCheckBox, QSlider, QFormLayout,
     QStackedLayout, QSizePolicy, QLineEdit, QGroupBox, QMenu, QTreeWidget,
     QTreeWidgetItem, QSplitter, QInputDialog, QFocusFrame,
-    QListWidget, QListWidgetItem,
+    QListWidget, QListWidgetItem, QComboBox, QFontComboBox,
     QGraphicsDropShadowEffect
 )
 from functools import partial
@@ -120,6 +120,53 @@ def _handle_exception(exc_type, exc_value, exc_traceback):
     logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
 
 sys.excepthook = _handle_exception
+
+# ── THEME DEFINITIONS ───────────────────────────────────
+# Color schemes and accent colors used throughout the UI
+THEMES = {
+    "Matrix": {
+        "fg": "#00ff00",
+        "bg": "#000000",
+        "alt": "#001100",
+        "accent": "#39ff14",
+        "hover": "#003300",
+    },
+    "Dull Green": {
+        "fg": "#228B22",
+        "bg": "#000000",
+        "alt": "#002200",
+        "accent": "#2ecc71",
+        "hover": "#004400",
+    },
+    "Orange": {
+        "fg": "#ff8c00",
+        "bg": "#2b1100",
+        "alt": "#331400",
+        "accent": "#ffbf00",
+        "hover": "#552200",
+    },
+    "Pink": {
+        "fg": "#ff69b4",
+        "bg": "#330014",
+        "alt": "#44001a",
+        "accent": "#ffb7d5",
+        "hover": "#660024",
+    },
+    "White": {
+        "fg": "#000000",
+        "bg": "#ffffff",
+        "alt": "#dddddd",
+        "accent": "#666666",
+        "hover": "#cccccc",
+    },
+    "Dark": {
+        "fg": "#ffffff",
+        "bg": "#121212",
+        "alt": "#222222",
+        "accent": "#448aff",
+        "hover": "#333333",
+    },
+}
 
 # ── HELPERS ───────────────────────────────────────
 def discover_channels(root: Path) -> List[Path]:
@@ -231,45 +278,46 @@ class IPInfoDialog(QDialog):
         self.setModal(True)
         self.setFixedSize(450, 300)
         
-        # Apply Matrix theme
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #000000;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-            }
-            QLabel {
-                color: #00ff00;
-                font-family: "Consolas", monospace;
-                padding: 5px;
-            }
-            QPushButton {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                padding: 8px 16px;
-                font-weight: bold;
-                font-size: 14px;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #003300;
-                border-color: #39ff14;
-            }
-            QGroupBox {
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                border-radius: 6px;
-                margin-top: 10px;
-                font-weight: bold;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-        """)
+        # Apply theme from parent
+        if parent and hasattr(parent, "css"):
+            self.setStyleSheet(parent.css("""
+                QDialog {{
+                    background-color: {bg};
+                    color: {fg};
+                    border: 2px solid {fg};
+                }}
+                QLabel {{
+                    color: {fg};
+                    font-family: "{font}", monospace;
+                    padding: 5px;
+                }}
+                QPushButton {{
+                    background-color: {alt};
+                    color: {fg};
+                    border: 2px solid {fg};
+                    padding: 8px 16px;
+                    font-weight: bold;
+                    font-size: 14px;
+                    border-radius: 4px;
+                }}
+                QPushButton:hover {{
+                    background-color: {hover};
+                    border-color: {accent};
+                }}
+                QGroupBox {{
+                    color: {fg};
+                    border: 2px solid {fg};
+                    border-radius: 6px;
+                    margin-top: 10px;
+                    font-weight: bold;
+                    padding-top: 10px;
+                }}
+                QGroupBox::title {{
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 5px;
+                }}
+            """))
         
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
@@ -294,7 +342,8 @@ class IPInfoDialog(QDialog):
         # IP addresses
         for ip in ips:
             url_label = QLabel(f"  >> http://{ip}:{port}")
-            url_label.setStyleSheet("font-size: 14px; color: #39ff14; font-weight: bold;")
+            if parent and hasattr(parent, "css"):
+                url_label.setStyleSheet(parent.css("font-size: 14px; color: {accent}; font-weight: bold;"))
             url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
             info_layout.addWidget(url_label)
         
@@ -302,7 +351,8 @@ class IPInfoDialog(QDialog):
         
         # Instructions
         instructions = QLabel("[!] Save these addresses to access the remote control\n    from your phone, tablet, or other computer")
-        instructions.setStyleSheet("font-style: italic; padding: 10px;")
+        if parent and hasattr(parent, "css"):
+            instructions.setStyleSheet(parent.css("font-style: italic; padding: 10px;"))
         instructions.setAlignment(Qt.AlignCenter)
         layout.addWidget(instructions)
         
@@ -833,38 +883,33 @@ class Console(QDialog):
         self.setWindowTitle("[LOG] Infinite Tv Console")
         self.resize(900, 500)
         
-        # Apply Matrix theme
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #000000;
-                color: #00ff00;
-            }
-            QPlainTextEdit {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                font-family: "Consolas", monospace;
-                font-size: 11px;
-                selection-background-color: #00ff00;
-                selection-color: #000000;
-            }
-            QLabel {
-                color: #00ff00;
-                font-weight: bold;
-            }
-            QPushButton {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                padding: 6px 12px;
-                font-weight: bold;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #003300;
-                border-color: #39ff14;
-            }
-        """)
+        # Apply theme
+        if parent and hasattr(parent, "css"):
+            self.setStyleSheet(parent.css("""
+                QDialog {{ background-color: {bg}; color: {fg}; }}
+                QPlainTextEdit {{
+                    background-color: {alt};
+                    color: {fg};
+                    border: 2px solid {fg};
+                    font-family: "{font}", monospace;
+                    font-size: 11px;
+                    selection-background-color: {accent};
+                    selection-color: {bg};
+                }}
+                QLabel {{ color: {fg}; font-weight: bold; }}
+                QPushButton {{
+                    background-color: {alt};
+                    color: {fg};
+                    border: 2px solid {fg};
+                    padding: 6px 12px;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }}
+                QPushButton:hover {{
+                    background-color: {hover};
+                    border-color: {accent};
+                }}
+            """))
         
         self.text = QPlainTextEdit(readOnly=True)
         self.text.setFont(QFont("Consolas", 10))
@@ -914,58 +959,55 @@ class SettingsDialog(QDialog):
         self.setModal(True)
         self.resize(500, 420)
         
-        # Apply Matrix theme
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #000000;
-                color: #00ff00;
-            }
-            QGroupBox {
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                border-radius: 6px;
-                margin-top: 10px;
-                font-weight: bold;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-            QLabel {
-                color: #00ff00;
-            }
-            QSpinBox, QSlider {
-                background-color: #001100;
-                color: #00ff00;
-                border: 1px solid #00ff00;
-            }
-            QCheckBox {
-                color: #00ff00;
-            }
-            QCheckBox::indicator {
-                width: 16px;
-                height: 16px;
-                border: 2px solid #00ff00;
-                background-color: #001100;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #00ff00;
-            }
-            QPushButton {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                padding: 6px 12px;
-                font-weight: bold;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #003300;
-                border-color: #39ff14;
-            }
-        """)
+        # Apply theme
+        if parent and hasattr(parent, "css"):
+            self.setStyleSheet(parent.css("""
+                QDialog {{
+                    background-color: {bg};
+                    color: {fg};
+                }}
+                QGroupBox {{
+                    color: {fg};
+                    border: 2px solid {fg};
+                    border-radius: 6px;
+                    margin-top: 10px;
+                    font-weight: bold;
+                    padding-top: 10px;
+                }}
+                QGroupBox::title {{
+                    subcontrol-origin: margin;
+                    left: 10px;
+                    padding: 0 5px;
+                }}
+                QLabel {{ color: {fg}; }}
+                QSpinBox, QSlider {{
+                    background-color: {alt};
+                    color: {fg};
+                    border: 1px solid {fg};
+                }}
+                QCheckBox {{ color: {fg}; }}
+                QCheckBox::indicator {{
+                    width: 16px;
+                    height: 16px;
+                    border: 2px solid {fg};
+                    background-color: {alt};
+                }}
+                QCheckBox::indicator:checked {{
+                    background-color: {fg};
+                }}
+                QPushButton {{
+                    background-color: {alt};
+                    color: {fg};
+                    border: 2px solid {fg};
+                    padding: 6px 12px;
+                    font-weight: bold;
+                    border-radius: 4px;
+                }}
+                QPushButton:hover {{
+                    background-color: {hover};
+                    border-color: {accent};
+                }}
+            """))
         
         layout = QVBoxLayout(self)
         
@@ -1000,7 +1042,8 @@ class SettingsDialog(QDialog):
         
         info_label = QLabel("[!] Changing these settings will rebuild all schedules\nand return you to the TV Guide.")
         info_label.setWordWrap(True)
-        info_label.setStyleSheet("color: #f39c12; font-style: italic; padding: 8px;")
+        if parent and hasattr(parent, "css"):
+            info_label.setStyleSheet(parent.css("color: #f39c12; font-style: italic; padding: 8px;"))
         sched_layout.addRow(info_label)
         
         self.min_show_len = QSpinBox()
@@ -1034,6 +1077,21 @@ class SettingsDialog(QDialog):
         self.weather_loc = QLineEdit(s.get("weather_location", "Norfolk"))
         weather_layout.addRow("Location:", self.weather_loc)
         layout.addWidget(weather_group)
+
+        # Theme Settings
+        theme_group = QGroupBox("[LOOK] Theme")
+        theme_layout = QFormLayout(theme_group)
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(list(THEMES.keys()))
+        self.theme_combo.setCurrentText(s.get("theme", "Matrix"))
+        theme_layout.addRow("Color Theme:", self.theme_combo)
+
+        self.font_combo = QFontComboBox()
+        self.font_combo.setCurrentFont(QFont(s.get("font", "Consolas")))
+        theme_layout.addRow("Font:", self.font_combo)
+
+        layout.addWidget(theme_group)
 
         # Advanced Settings Group
         advanced_group = QGroupBox("[ADV] Advanced")
@@ -1121,6 +1179,8 @@ class SettingsDialog(QDialog):
             "ad_break_minutes": self.ad_break_len.value(),
             "web_port": self.web_port.value(),
             "weather_location": self.weather_loc.text(),
+            "theme": self.theme_combo.currentText(),
+            "font": self.font_combo.currentFont().family(),
             "cache_file": self.cache_edit.text(),
             "hotkey_file": self.hotkey_edit.text(),
             "channels_dir": self.channels_edit.text(),
@@ -3155,7 +3215,9 @@ class TVPlayer(QMainWindow):
         "recent_channels": "[]",
         "use_all_commercials_channels": "[]",
         "window_width": 1400,
-        "window_height": 800
+        "window_height": 800,
+        "theme": "Matrix",
+        "font": "Consolas"
     }
 
     def __init__(self):
@@ -3167,7 +3229,10 @@ class TVPlayer(QMainWindow):
         height = int(self.settings.get("window_height", 800))
         self.resize(width, height)
         self._tray_exit = False
-        self._apply_dark_theme()
+        self.theme_name = self.settings.get("theme", "Matrix")
+        self.font_family = self.settings.get("font", "Consolas")
+        self.theme_colors = THEMES.get(self.theme_name, THEMES["Matrix"])
+        self._apply_theme()
 
         # Load settings and cache
         self._auto_select_channels_folder()
@@ -3228,15 +3293,15 @@ class TVPlayer(QMainWindow):
 
         # Subtitle system
         self.sub_label = QLabel("", self.video, alignment=Qt.AlignHCenter | Qt.AlignBottom)
-        self.sub_label.setStyleSheet("""
-            color: #00ff00; 
-            background: rgba(0,0,0,220); 
-            padding: 6px 12px; 
+        self.sub_label.setStyleSheet(self.css("""
+            color: {fg};
+            background: rgba(0,0,0,220);
+            padding: 6px 12px;
             border-radius: 6px;
             font-weight: bold;
-            border: 1px solid #00ff00;
-        """)
-        self.sub_label.setFont(QFont("Consolas", self.settings["subtitle_size"]))
+            border: 1px solid {fg};
+        """))
+        self.sub_label.setFont(QFont(self.font_family, self.settings["subtitle_size"]))
         self.sub_label.hide()
 
         # Static effect
@@ -3332,49 +3397,55 @@ class TVPlayer(QMainWindow):
         QTimer.singleShot(500, self.show_web_server_info)  # Show IP info after init
 
     # ── MISSING METHOD IMPLEMENTATIONS ──────────────────────────────────
-    def _apply_dark_theme(self):
-        """Apply Matrix-style dark theme (black + neon-green)."""
+    def _apply_theme(self):
+        """Apply the currently selected color theme and font."""
         app = QApplication.instance()
         app.setStyle("Fusion")
 
+        t = self.theme_colors
         palette = QPalette()
 
         # core surfaces
-        palette.setColor(QPalette.Window,          QColor("#000000"))
-        palette.setColor(QPalette.Base,            QColor("#001100"))
-        palette.setColor(QPalette.AlternateBase,   QColor("#002200"))
+        palette.setColor(QPalette.Window,          QColor(t["bg"]))
+        palette.setColor(QPalette.Base,            QColor(t["alt"]))
+        palette.setColor(QPalette.AlternateBase,   QColor(t["hover"]))
 
         # text & headings
-        palette.setColor(QPalette.WindowText,      QColor("#00ff00"))
-        palette.setColor(QPalette.Text,            QColor("#00ff00"))
-        palette.setColor(QPalette.ButtonText,      QColor("#00ff00"))
-        palette.setColor(QPalette.HighlightedText, QColor("#000000"))
+        palette.setColor(QPalette.WindowText,      QColor(t["fg"]))
+        palette.setColor(QPalette.Text,            QColor(t["fg"]))
+        palette.setColor(QPalette.ButtonText,      QColor(t["fg"]))
+        palette.setColor(QPalette.HighlightedText, QColor(t["bg"]))
 
         # buttons & selection
-        palette.setColor(QPalette.Button,          QColor("#001100"))
-        palette.setColor(QPalette.Highlight,       QColor("#00ff00"))
-        palette.setColor(QPalette.Link,            QColor("#00ff00"))
+        palette.setColor(QPalette.Button,          QColor(t["alt"]))
+        palette.setColor(QPalette.Highlight,       QColor(t["accent"]))
+        palette.setColor(QPalette.Link,            QColor(t["accent"]))
 
         # tooltips & misc
-        palette.setColor(QPalette.ToolTipBase,     QColor("#000000"))
-        palette.setColor(QPalette.ToolTipText,     QColor("#00ff00"))
+        palette.setColor(QPalette.ToolTipBase,     QColor(t["bg"]))
+        palette.setColor(QPalette.ToolTipText,     QColor(t["fg"]))
         palette.setColor(QPalette.BrightText,      QColor("#ff0000"))
 
         app.setPalette(palette)
+        app.setFont(QFont(self.font_family))
+
+    def css(self, template: str) -> str:
+        """Format a stylesheet string using the current theme."""
+        return template.format(**self.theme_colors, font=self.font_family)
 
     def _setup_overlays(self):
         """Setup OSD and info overlays."""
         self.osd = QLabel("", self)
-        self.osd.setStyleSheet("""
-            font-size: 28px; 
-            color: #00ff00; 
-            background: rgba(0,0,0,220); 
-            padding: 12px 20px; 
+        self.osd.setStyleSheet(self.css("""
+            font-size: 28px;
+            color: {fg};
+            background: rgba(0,0,0,220);
+            padding: 12px 20px;
             border-radius: 8px;
             font-weight: bold;
-            border: 2px solid #00ff00;
-            text-shadow: 0 0 10px #39ff14;
-        """)
+            border: 2px solid {fg};
+            text-shadow: 0 0 10px {accent};
+        """))
         self.osd.hide()
         
         self.osd_logo = QLabel(self)
@@ -3382,28 +3453,28 @@ class TVPlayer(QMainWindow):
         self.osd_logo.hide()
         
         self.info = QLabel("", self)
-        self.info.setStyleSheet("""
-            font-size: 16px; 
-            color: #00ff00; 
-            background: rgba(0,0,0,220); 
-            padding: 12px; 
+        self.info.setStyleSheet(self.css("""
+            font-size: 16px;
+            color: {fg};
+            background: rgba(0,0,0,220);
+            padding: 12px;
             border-radius: 8px;
-            border: 2px solid #00ff00;
-            font-family: "Consolas", monospace;
-        """)
+            border: 2px solid {fg};
+            font-family: "{font}", monospace;
+        """))
         self.info.hide()
 
         # Loading overlay used during schedule refreshes
         self.loading_label = QLabel("Refreshing...", self)
-        self.loading_label.setStyleSheet("""
+        self.loading_label.setStyleSheet(self.css("""
             font-size: 24px;
-            color: #00ff00;
+            color: {fg};
             background: rgba(0,0,0,220);
             padding: 20px;
             border-radius: 8px;
-            border: 2px solid #00ff00;
+            border: 2px solid {fg};
             font-weight: bold;
-        """)
+        """))
         self.loading_label.setAlignment(Qt.AlignCenter)
         self.loading_label.hide()
 
@@ -4623,10 +4694,16 @@ class TVPlayer(QMainWindow):
             self.durations = self._load_cache()
             self.hotkeys = self._load_hotkeys()
             self._bind_keys()
-            
+
+            # Update theme/font
+            self.theme_name = self.settings.get("theme", "Matrix")
+            self.font_family = self.settings.get("font", "Consolas")
+            self.theme_colors = THEMES.get(self.theme_name, THEMES["Matrix"])
+            self._apply_theme()
+
             # Apply volume immediately
             self.player.setVolume(self.settings["default_volume"])
-            self.sub_label.setFont(QFont("Consolas", self.settings["subtitle_size"]))
+            self.sub_label.setFont(QFont(self.font_family, self.settings["subtitle_size"]))
             
             # Check if schedule-affecting settings changed
             schedule_affecting = ['min_show_minutes', 'ad_break_minutes']
@@ -4763,32 +4840,32 @@ class TVPlayer(QMainWindow):
         """Build enhanced application menu."""
         menubar = self.menuBar()
         
-        # Apply Matrix theme to menu
-        menubar.setStyleSheet("""
+        # Apply theme to menu
+        menubar.setStyleSheet(self.css("""
             QMenuBar {
-                background-color: #000000;
-                color: #00ff00;
-                border-bottom: 2px solid #00ff00;
+                background-color: {bg};
+                color: {fg};
+                border-bottom: 2px solid {fg};
             }
             QMenuBar::item {
                 padding: 4px 10px;
                 background: transparent;
             }
             QMenuBar::item:selected {
-                background: #002200;
+                background: {hover};
             }
             QMenu {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
+                background-color: {alt};
+                color: {fg};
+                border: 2px solid {fg};
             }
             QMenu::item {
                 padding: 4px 20px;
             }
             QMenu::item:selected {
-                background-color: #003300;
+                background-color: {hover};
             }
-        """)
+        """))
         
         # Channel Menu
         channel_menu = menubar.addMenu("&Channel")
