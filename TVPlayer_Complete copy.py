@@ -4329,19 +4329,20 @@ class TVPlayer(QMainWindow):
         icon = self._apply_app_icon()
 
         self.tray = QSystemTrayIcon(icon, self)
-        menu = QMenu()
+        # Keep a reference to the tray menu so it isn't garbage collected
+        self._tray_menu = QMenu()
 
-        menu.addAction("[GUIDE]", lambda checked=False: self._tray_switch_channel(0))
-        menu.addAction("OnDemand", lambda checked=False: self._tray_switch_channel(1))
-        ch_menu = menu.addMenu("Channels")
+        self._tray_menu.addAction("[GUIDE]", lambda checked=False: self._tray_switch_channel(0))
+        self._tray_menu.addAction("OnDemand", lambda checked=False: self._tray_switch_channel(1))
+        ch_menu = self._tray_menu.addMenu("Channels")
         for idx, ch in enumerate(self.channels[2:], start=2):
             ch_menu.addAction(ch.name, lambda checked, i=idx: self._tray_switch_channel(i))
 
-        menu.addSeparator()
-        menu.addAction("[PREF] Preferences...", lambda checked=False: self.show_settings())
-        menu.addAction("[QUIT] Exit", lambda checked=False: self._exit_from_tray())
+        self._tray_menu.addSeparator()
+        self._tray_menu.addAction("[PREF] Preferences...", lambda checked=False: self.show_settings())
+        self._tray_menu.addAction("[QUIT] Exit", lambda checked=False: self._exit_from_tray())
 
-        self.tray.setContextMenu(menu)
+        self.tray.setContextMenu(self._tray_menu)
         self.tray.activated.connect(self._on_tray_activated)
         self.tray.show()
 
