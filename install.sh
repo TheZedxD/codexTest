@@ -58,3 +58,5 @@ if [ "$pkg_ok" = true ]; then echo -e "${GREEN}[✓] Python packages installed${
 if [ "$dir_ok" = true ]; then echo -e "${GREEN}[✓] Folder structure created${RESET}"; fi
 if [ "$copy_ok" = true ]; then echo -e "${GREEN}[✓] Media setup complete${RESET}"; fi
 echo -e "${GREEN}[✓] Installation complete. Run with: python3 'TVPlayer_Complete copy.py'${RESET}"
+echo "If you have a logo.png file in this directory it will be used for the"
+echo "system tray icon on supported desktops."

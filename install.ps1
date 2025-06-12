@@ -46,3 +46,5 @@ if ($pkgOk) { Write-Host "$green[✓] Python packages installed$reset" }
 if ($dirOk) { Write-Host "$green[✓] Folder structure created$reset" }
 if ($copyOk) { Write-Host "$green[✓] Media setup complete$reset" }
 Write-Host "$green[✓] Installation complete. Run: python 'TVPlayer_Complete copy.py'$reset"
+Write-Host "If a logo.png file exists in this folder it will become the"
+Write-Host "system tray icon when running Infinite Tv."
