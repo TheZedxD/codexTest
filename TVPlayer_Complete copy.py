@@ -29,6 +29,7 @@ from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import platform
+import ctypes
 import webbrowser
 import signal
 import weakref
@@ -1071,6 +1072,14 @@ class SettingsDialog(QDialog):
         chan_row.addWidget(browse_chan)
         file_layout.addRow("Channels Folder:", chan_row)
 
+        self.icon_edit = QLineEdit(s.get("tray_icon", str(ROOT_DIR / "logo.png")))
+        browse_icon = QPushButton("[...]")
+        browse_icon.clicked.connect(lambda: self._browse_file(self.icon_edit, image=True))
+        icon_row = QHBoxLayout()
+        icon_row.addWidget(self.icon_edit)
+        icon_row.addWidget(browse_icon)
+        file_layout.addRow("Tray Icon:", icon_row)
+
         layout.addWidget(file_group)
         
         # Buttons
@@ -1088,8 +1097,12 @@ class SettingsDialog(QDialog):
         except Exception as e:
             QMessageBox.warning(self, "[ERR] Error", f"Failed to clear cache: {e}")
 
-    def _browse_file(self, edit: QLineEdit):
-        path, _ = QFileDialog.getSaveFileName(self, "Select File", edit.text(), "JSON Files (*.json)")
+    def _browse_file(self, edit: QLineEdit, image: bool = False):
+        if image:
+            filter_str = "Image Files (*.png *.jpg *.jpeg *.gif *.bmp *.ico)"
+            path, _ = QFileDialog.getOpenFileName(self, "Select File", edit.text(), filter_str)
+        else:
+            path, _ = QFileDialog.getSaveFileName(self, "Select File", edit.text(), "JSON Files (*.json)")
         if path:
             edit.setText(path)
 
@@ -1109,7 +1122,8 @@ class SettingsDialog(QDialog):
             "weather_location": self.weather_loc.text(),
             "cache_file": self.cache_edit.text(),
             "hotkey_file": self.hotkey_edit.text(),
-            "channels_dir": self.channels_edit.text()
+            "channels_dir": self.channels_edit.text(),
+            "tray_icon": self.icon_edit.text()
         }
 
 # ───────────── Hot-key dialog ─────────────
@@ -3135,6 +3149,7 @@ class TVPlayer(QMainWindow):
         "cache_file": str(DEFAULT_CACHE_FILE),
         "hotkey_file": str(DEFAULT_HOTKEY_FILE),
         "weather_location": "Norfolk",
+        "tray_icon": str(ROOT_DIR / "logo.png"),
         "load_last_folder": True,
         "recent_channels": "[]",
         "use_all_commercials_channels": "[]",
@@ -3186,13 +3201,8 @@ class TVPlayer(QMainWindow):
         for ch in self.channels_real:
             self._last_show_order[ch] = self._load_last_order(ch)
 
-        # Use default channel icon as application icon
-        if self.channels_real:
-            logo = self._find_logo(self.channels_real[0])
-            if logo:
-                icon = QIcon(logo)
-                QApplication.instance().setWindowIcon(icon)
-                self.setWindowIcon(icon)
+        # Apply icon from settings or first channel
+        self._apply_app_icon()
         self.ch_idx = 0
         self._create_tray_icon()
 
@@ -4245,6 +4255,22 @@ class TVPlayer(QMainWindow):
             if logo:
                 self.channel_logo[channel] = logo
 
+    def _apply_app_icon(self):
+        """Apply application and tray icon based on settings or defaults."""
+        icon_path = Path(self.settings.get("tray_icon", str(ROOT_DIR / "logo.png")))
+        if not icon_path.exists():
+            if self.channels_real:
+                logo = self._find_logo(self.channels_real[0])
+                if logo:
+                    icon_path = Path(logo)
+        if icon_path.exists():
+            icon = QIcon(str(icon_path))
+            QApplication.instance().setWindowIcon(icon)
+            self.setWindowIcon(icon)
+        else:
+            icon = self.windowIcon()
+        return icon
+
     def _load_hotkeys(self) -> Dict[str, str]:
         """Load hotkey configuration."""
         try:
@@ -4300,20 +4326,16 @@ class TVPlayer(QMainWindow):
     # ── SYSTEM TRAY INTEGRATION ──────────────────────────────────
     def _create_tray_icon(self):
         """Set up the system tray icon and menu."""
-        icon_path = ROOT_DIR / "logo.png"
-        icon = QIcon(str(icon_path)) if icon_path.exists() else self.windowIcon()
+        icon = self._apply_app_icon()
 
         self.tray = QSystemTrayIcon(icon, self)
         menu = QMenu()
 
-        for idx, ch in enumerate(self.channels):
-            if idx == 0:
-                title = "[GUIDE]"
-            elif idx == 1:
-                title = "OnDemand"
-            else:
-                title = ch.name
-            menu.addAction(title, lambda checked, i=idx: self._tray_switch_channel(i))
+        menu.addAction("[GUIDE]", lambda: self._tray_switch_channel(0))
+        menu.addAction("OnDemand", lambda: self._tray_switch_channel(1))
+        ch_menu = menu.addMenu("Channels")
+        for idx, ch in enumerate(self.channels[2:], start=2):
+            ch_menu.addAction(ch.name, lambda checked, i=idx: self._tray_switch_channel(i))
 
         menu.addSeparator()
         menu.addAction("[PREF] Preferences...", self.show_settings)
@@ -4779,16 +4801,16 @@ class TVPlayer(QMainWindow):
         program_submenu.addAction("[RELOAD] Reload Schedule", self.reload_schedule, "Ctrl+R")
         
         # File Menu
-        file_menu = menubar.addMenu("&Content")
+        file_menu = menubar.addMenu("&File")
         file_menu.addAction("[OPEN] &Open Channels Folder", self.open_channels_folder, "Ctrl+O")
         file_menu.addAction("[SELECT] &Select Channels Folder...", self.select_channels_folder)
-        file_menu.addAction("[SAVED] Manage Saved Folders", self.show_saved_channels_editor)
         self.recent_menu = file_menu.addMenu("[RECENT] Recent Folders")
         self._populate_recent_menu()
+        file_menu.addAction("[SAVED] Manage Saved Folders", self.show_saved_channels_editor)
         file_menu.addSeparator()
         file_menu.addAction("[EDIT] &TV Network Editor", self.show_network_editor, "Ctrl+E")
-        file_menu.addSeparator()
         file_menu.addAction("[RELOAD] &Reload Channels", self.reload_channels, "F5")
+        file_menu.addSeparator()
         file_menu.addAction("[EXIT] E&xit", self.close, "Ctrl+Q")
         
         # Audio/Video Menu
@@ -5109,7 +5131,13 @@ class TVPlayer(QMainWindow):
 if __name__ == "__main__":
     try:
         logging.info("[START] Starting Infinite Tv")
-        
+
+        if sys.platform.startswith("win"):
+            try:
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("InfiniteTv")
+            except Exception:
+                pass
+
         app = QApplication(sys.argv)
         app.setApplicationName("Infinite Tv")
         app.setApplicationVersion("r45-complete-fixed")
