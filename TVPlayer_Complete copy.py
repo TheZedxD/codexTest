@@ -4891,29 +4891,29 @@ class TVPlayer(QMainWindow):
         
         # Apply theme to menu
         menubar.setStyleSheet(self.css("""
-            QMenuBar {
+            QMenuBar {{
                 background-color: {bg};
                 color: {fg};
                 border-bottom: 2px solid {fg};
-            }
-            QMenuBar::item {
+            }}
+            QMenuBar::item {{
                 padding: 4px 10px;
                 background: transparent;
-            }
-            QMenuBar::item:selected {
+            }}
+            QMenuBar::item:selected {{
                 background: {hover};
-            }
-            QMenu {
+            }}
+            QMenu {{
                 background-color: {alt};
                 color: {fg};
                 border: 2px solid {fg};
-            }
-            QMenu::item {
+            }}
+            QMenu::item {{
                 padding: 4px 20px;
-            }
-            QMenu::item:selected {
+            }}
+            QMenu::item:selected {{
                 background-color: {hover};
-            }
+            }}
         """))
         
         # Channel Menu
