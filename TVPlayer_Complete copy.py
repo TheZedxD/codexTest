@@ -3491,12 +3491,12 @@ class TVPlayer(QMainWindow):
         self.info = QLabel("", self)
         self.info.setStyleSheet(self.css(f"""
             font-size: {self.base_info_font_size}px;
-            color: {fg};
+            color: {{fg}};
             background: rgba(0,0,0,220);
             padding: 12px;
             border-radius: 8px;
-            border: 2px solid {fg};
-            font-family: "{font}", monospace;
+            border: 2px solid {{fg}};
+            font-family: "{{font}}", monospace;
         """))
         self.info.hide()
 
@@ -3519,12 +3519,12 @@ class TVPlayer(QMainWindow):
         size = int(self.base_info_font_size * scale)
         self.info.setStyleSheet(self.css(f"""
             font-size: {size}px;
-            color: {fg};
+            color: {{fg}};
             background: rgba(0,0,0,220);
             padding: 12px;
             border-radius: 8px;
-            border: 2px solid {fg};
-            font-family: "{font}", monospace;
+            border: 2px solid {{fg}};
+            font-family: "{{font}}", monospace;
         """))
 
     # ── ENHANCED WEB SERVER METHODS ──────────────────────────────────
