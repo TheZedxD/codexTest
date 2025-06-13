@@ -1011,8 +1011,14 @@ class SettingsDialog(QDialog):
                 }}
             """))
         
-        layout = QVBoxLayout(self)
-        
+        main_layout = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        scroll.setWidget(container)
+        main_layout.addWidget(scroll)
+        layout = QVBoxLayout(container)
+
         # Video Settings Group
         video_group = QGroupBox("[VID] Video & Audio")
         video_layout = QFormLayout(video_group)
@@ -3462,8 +3468,28 @@ class TVPlayer(QMainWindow):
         palette.setColor(QPalette.BrightText,      QColor("#ff0000"))
 
         app.setPalette(palette)
-        app.setFont(QFont(self.font_family))
+        app.setFont(QFont(self.font_family, 9))
 
+        if hasattr(self, 'osd'):
+            self.osd.setStyleSheet(self.css(
+                "font-size: 28px; color: {fg}; background: rgba(0,0,0,220);"
+                " padding: 12px 20px; border-radius: 8px; font-weight: bold;"
+                " border: 2px solid {fg}; text-shadow: 0 0 10px {accent};"
+            ))
+        if hasattr(self, 'info'):
+            self.info.setStyleSheet(self.css(
+                f"font-size: {self.base_info_font_size}px; color: {{fg}};"
+                " background: rgba(0,0,0,220); padding: 12px; border-radius: 8px;"
+                " border: 2px solid {{fg}}; font-family: \"{self.font_family}\", monospace;"
+            ))
+        if hasattr(self, 'loading_label'):
+            self.loading_label.setStyleSheet(self.css(
+                "font-size: 24px; color: {fg}; background: rgba(0,0,0,220);"
+                " padding: 20px; border-radius: 8px; border: 2px solid {fg};"
+                " font-weight: bold;"
+            ))
+        if hasattr(self, '_build_menu'):
+            self._build_menu()
     def css(self, template: str) -> str:
         """Format a stylesheet string using the current theme."""
         return template.format(**self.theme_colors, font=self.font_family)
@@ -4888,6 +4914,7 @@ class TVPlayer(QMainWindow):
     def _build_menu(self):
         """Build enhanced application menu."""
         menubar = self.menuBar()
+        menubar.clear()
         
         # Apply theme to menu
         menubar.setStyleSheet(self.css("""
@@ -4895,9 +4922,10 @@ class TVPlayer(QMainWindow):
                 background-color: {bg};
                 color: {fg};
                 border-bottom: 2px solid {fg};
+                font-size: 10px;
             }}
             QMenuBar::item {{
-                padding: 4px 10px;
+                padding: 2px 6px;
                 background: transparent;
             }}
             QMenuBar::item:selected {{
@@ -4907,9 +4935,10 @@ class TVPlayer(QMainWindow):
                 background-color: {alt};
                 color: {fg};
                 border: 2px solid {fg};
+                font-size: 10px;
             }}
             QMenu::item {{
-                padding: 4px 20px;
+                padding: 2px 12px;
             }}
             QMenu::item:selected {{
                 background-color: {hover};
@@ -5218,7 +5247,12 @@ class TVPlayer(QMainWindow):
 
     def _on_focus_changed(self, old, new):
         if new:
-            self.focus_frame.setWidget(new)
+            try:
+                self.focus_frame.setWidget(new)
+            except RuntimeError:
+                self.focus_frame = QFocusFrame(self)
+                self.focus_frame.setStyleSheet("QFocusFrame{border:2px solid white;}")
+                self.focus_frame.setWidget(new)
 
     def closeEvent(self, event):
         """Enhanced close event with proper cleanup."""
