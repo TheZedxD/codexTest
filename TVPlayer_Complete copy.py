@@ -3347,6 +3347,9 @@ class TVPlayer(QMainWindow):
         if self.static_movie:
             self.static_label.setMovie(self.static_movie)
 
+        # OSD and Info overlays (must be created before GuideWidget)
+        self._setup_overlays()
+
         # UI Components
         self.guide = GuideWidget(self)
         self.console = Console(self)
@@ -3376,9 +3379,6 @@ class TVPlayer(QMainWindow):
         container = QWidget()
         container.setLayout(self.stack)
         self.setCentralWidget(container)
-
-        # OSD and Info overlays
-        self._setup_overlays()
 
         # Enhanced schedule data with better tracking
         self.schedules: Dict[Path, List] = {}
