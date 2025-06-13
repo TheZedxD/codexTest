@@ -562,6 +562,7 @@ class FlaskServerManager(QObject):
     <button class="btn small" onclick="send('info')">[i] INFO</button>
     <button class="btn small" onclick="send('fs')">[F] FULLSCREEN</button>
     <button class="btn small" onclick="send('restart_server')">[R] RESTART</button>
+    <button class="btn small" onclick="send('reload_schedule')">[RS] RELOAD SCHEDULE</button>
 
     <div class="nav-links">
         <a href="/media">[M] Media Browser</a>
@@ -820,8 +821,9 @@ async function loadGuide(){
     const res=await fetch('/api/guide');
     const data=await res.json();
     const tbl=document.getElementById('guide');
-    tbl.innerHTML='<tr><th>Channel</th><th>Now</th><th>Next</th></tr>'+
-        data.map(ch=>`<tr><td>${ch.channel}</td><td><a href="#" onclick="gotoCh(${ch.index});return false;">${ch.current}</a></td>`+
+    tbl.innerHTML='<tr><th>#</th><th>Channel</th><th>Now</th><th>Next</th></tr>'+
+        data.map(ch=>`<tr><td>${ch.index}</td><td><a href="#" onclick="gotoCh(${ch.index});return false;">${ch.channel}</a></td>`+
+        `<td><a href="#" onclick="gotoCh(${ch.index});return false;">${ch.current}</a></td>`+
         `<td>${ch.shows.slice(1,3).map(s=>s.title).join(' , ')}</td></tr>`).join('');
 }
 function gotoCh(idx){
@@ -2246,8 +2248,14 @@ class GuideWidget(QWidget):
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
 
+        self.label_base_style = (
+            "padding:4px 8px;border:2px solid #00ff00;"
+            "border-radius:4px;font-size:14px;font-weight:bold;"
+        )
         self.remote_label = QLabel("REMOTE: ?")
+        self.remote_label.setAlignment(Qt.AlignCenter)
         self.net_label = QLabel("NET: ?")
+        self.net_label.setAlignment(Qt.AlignCenter)
 
         self.info_box = QGroupBox()
         info_layout = QVBoxLayout(self.info_box)
@@ -2259,6 +2267,10 @@ class GuideWidget(QWidget):
         info_layout.addLayout(top_row)
         self.time_label = QLabel()
         self.weather_label = QLabel("Weather: ...")
+        self.weather_label.setAlignment(Qt.AlignCenter)
+        self.remote_label.setStyleSheet(f"{self.label_base_style} color:#00ff00;")
+        self.net_label.setStyleSheet(f"{self.label_base_style} color:#00ff00;")
+        self.weather_label.setStyleSheet(f"{self.label_base_style} color:#00ff00;")
         self.refresh_label = QLabel("<u>refresh</u>")
         self.refresh_label.setCursor(Qt.PointingHandCursor)
         self.refresh_label.mousePressEvent = lambda e: self.update_weather()
@@ -2293,7 +2305,9 @@ class GuideWidget(QWidget):
         self.base_icon_size = 48
         self.table.setIconSize(QSize(self.base_icon_size, self.base_icon_size))
 
-        self.zoom_level = 0
+        self.base_table_font_size = 11
+        self.base_header_font_size = 11
+        self.zoom_level = int(self.tv.settings.get("guide_zoom", 0))
         self.max_zoom_level = 3
         self._apply_zoom()
 
@@ -2331,18 +2345,19 @@ class GuideWidget(QWidget):
 
         self._update_time()
         self.update_weather()
+        self.update_status_indicators()
 
     def update_status_indicators(self):
         """Update remote and internet status indicators."""
         remote_ok = self.tv.flask_manager.is_running
         remote_color = "#00ff00" if remote_ok else "#ff0000"
         self.remote_label.setText("REMOTE" + (" OK" if remote_ok else " OFF"))
-        self.remote_label.setStyleSheet(f"color: {remote_color}")
+        self.remote_label.setStyleSheet(f"{self.label_base_style} color: {remote_color};")
 
         connected = self._has_net()
         net_color = "#00ff00" if connected else "#ff0000"
         self.net_label.setText("NET" + (" OK" if connected else " OFF"))
-        self.net_label.setStyleSheet(f"color: {net_color}")
+        self.net_label.setStyleSheet(f"{self.label_base_style} color: {net_color};")
 
     def _apply_zoom(self):
         """Apply zoom settings to table headers and icons."""
@@ -2351,6 +2366,14 @@ class GuideWidget(QWidget):
         self.table.verticalHeader().setDefaultSectionSize(int(self.base_row_size * scale))
         size = int(self.base_icon_size * scale)
         self.table.setIconSize(QSize(size, size))
+        font = self.table.font()
+        font.setPointSize(int(self.base_table_font_size * scale))
+        self.table.setFont(font)
+        header_font = self.table.horizontalHeader().font()
+        header_font.setPointSize(int(self.base_header_font_size * scale))
+        self.table.horizontalHeader().setFont(header_font)
+        self.table.verticalHeader().setFont(header_font)
+        self.tv.update_info_font(scale)
 
     def zoom_in(self):
         """Increase guide zoom level."""
@@ -2360,6 +2383,8 @@ class GuideWidget(QWidget):
             self._apply_zoom()
             self.refresh()
             self.tv._hide_loading()
+            self.tv.settings["guide_zoom"] = self.zoom_level
+            self.tv._save_settings()
 
     def zoom_out(self):
         """Decrease guide zoom level (not below default)."""
@@ -2369,6 +2394,8 @@ class GuideWidget(QWidget):
             self._apply_zoom()
             self.refresh()
             self.tv._hide_loading()
+            self.tv.settings["guide_zoom"] = self.zoom_level
+            self.tv._save_settings()
         
     def refresh(self):
         """Refresh the 12-hour TV guide."""
@@ -2708,14 +2735,20 @@ class GuideWidget(QWidget):
             return
         try:
             import requests
-            loc = self.tv.settings.get('weather_location', 'Norfolk')
+            if not hasattr(self, 'weather_locations'):
+                self.weather_locations = ['Virginia Beach', 'Norfolk', 'Chesapeake']
+                self.weather_index = 0
+            loc = self.weather_locations[self.weather_index]
+            self.weather_index = (self.weather_index + 1) % len(self.weather_locations)
             res = requests.get(f'https://wttr.in/{loc}?format=j1', timeout=5)
             data = res.json()
             cur = data['current_condition'][0]
-            temp = cur['temp_C']
+            temp = cur['temp_F']
             desc = cur['weatherDesc'][0]['value']
-            self.weather_label.setText(f"{temp}\u00B0C {desc}")
+            self.weather_label.setText(f"{loc}: {temp}\u00B0F {desc}")
+            self.weather_label.setStyleSheet(f"{self.label_base_style} color: #00ff00;")
             self.weather_data = data['weather'][0]
+            self.current_weather_loc = loc
         except Exception:
             self.weather_label.setText('Weather: N/A')
             self.weather_data = None
@@ -2727,8 +2760,9 @@ class GuideWidget(QWidget):
         day = self.weather_data
         astronomy = day.get('astronomy', [{}])[0]
         text = (
-            f"Max: {day.get('maxtempC')}\u00B0C\n"
-            f"Min: {day.get('mintempC')}\u00B0C\n"
+            f"Location: {getattr(self, 'current_weather_loc', '')}\n"
+            f"Max: {day.get('maxtempF')}\u00B0F\n"
+            f"Min: {day.get('mintempF')}\u00B0F\n"
             f"Sunrise: {astronomy.get('sunrise','?')}\n"
             f"Sunset: {astronomy.get('sunset','?')}"
         )
@@ -3217,7 +3251,8 @@ class TVPlayer(QMainWindow):
         "window_width": 1400,
         "window_height": 800,
         "theme": "Matrix",
-        "font": "Consolas"
+        "font": "Consolas",
+        "guide_zoom": 0
     }
 
     def __init__(self):
@@ -3452,9 +3487,10 @@ class TVPlayer(QMainWindow):
         self.osd_logo.setScaledContents(True)
         self.osd_logo.hide()
         
+        self.base_info_font_size = 16
         self.info = QLabel("", self)
-        self.info.setStyleSheet(self.css("""
-            font-size: 16px;
+        self.info.setStyleSheet(self.css(f"""
+            font-size: {self.base_info_font_size}px;
             color: {fg};
             background: rgba(0,0,0,220);
             padding: 12px;
@@ -3477,6 +3513,19 @@ class TVPlayer(QMainWindow):
         """))
         self.loading_label.setAlignment(Qt.AlignCenter)
         self.loading_label.hide()
+
+    def update_info_font(self, scale: float):
+        """Update font size of the info overlay based on zoom scale."""
+        size = int(self.base_info_font_size * scale)
+        self.info.setStyleSheet(self.css(f"""
+            font-size: {size}px;
+            color: {fg};
+            background: rgba(0,0,0,220);
+            padding: 12px;
+            border-radius: 8px;
+            border: 2px solid {fg};
+            font-family: "{font}", monospace;
+        """))
 
     # ── ENHANCED WEB SERVER METHODS ──────────────────────────────────
     def show_web_server_info(self):
