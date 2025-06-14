@@ -3504,7 +3504,8 @@ class TVPlayer(QMainWindow):
                 " padding: 20px; border-radius: 8px; border: 2px solid {fg};"
                 " font-weight: bold;"
             ))
-        if hasattr(self, '_build_menu'):
+        # Rebuild the menu only after the main UI components exist.
+        if hasattr(self, 'guide'):
             self._build_menu()
     def css(self, template: str) -> str:
         """Format a stylesheet string using the current theme."""
