@@ -3550,7 +3550,13 @@ class TVPlayer(QMainWindow):
             self.dev_remote.apply_theme()
     def css(self, template: str) -> str:
         """Format a stylesheet string using the current theme."""
-        return template.format(**self.theme_colors, font=self.font_family)
+        # Escape any braces that are not part of recognised placeholders so
+        # ``str.format`` does not treat them as unknown keys.
+        allowed = set(self.theme_colors) | {"font"}
+        css_template = template.replace("{", "{{").replace("}", "}}")
+        for key in allowed:
+            css_template = css_template.replace(f"{{{{{key}}}}}", f"{{{key}}}")
+        return css_template.format(**self.theme_colors, font=self.font_family)
 
     def _setup_overlays(self):
         """Setup OSD and info overlays."""
@@ -4450,6 +4456,7 @@ class TVPlayer(QMainWindow):
             logo_file = channel / f"logo{ext}"
             if logo_file.exists():
                 return str(logo_file)
+        logging.warning(f"No logo.png found for channel {channel}")
         return None
 
     def _rebuild_logos(self):
