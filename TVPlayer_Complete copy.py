@@ -219,6 +219,13 @@ def format_show_name(path: Path) -> str:
     name = re.sub(r'\s+', ' ', name).strip()
     return name[:50] + "..." if len(name) > 50 else name
 
+MAX_GUIDE_TITLE_LEN = 32
+
+def format_guide_title(path: Path) -> str:
+    """Sanitize and trim titles specifically for the TV guide grid."""
+    title = format_show_name(path)
+    return title[:MAX_GUIDE_TITLE_LEN] + "..." if len(title) > MAX_GUIDE_TITLE_LEN else title
+
 # ───────────── SRT parser ─────────────
 _TIMERE = re.compile(r"(\d{2}):(\d{2}):(\d{2}),(\d{3})")
 
@@ -959,7 +966,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("[SET] Infinite Tv Settings")
         self.setModal(True)
-        self.resize(500, 420)
+        self.resize(700, 500)
         
         # Apply theme
         if parent and hasattr(parent, "css"):
@@ -1017,7 +1024,9 @@ class SettingsDialog(QDialog):
         container = QWidget()
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
-        layout = QVBoxLayout(container)
+        layout = QGridLayout(container)
+        layout.setHorizontalSpacing(20)
+        layout.setVerticalSpacing(15)
 
         # Video Settings Group
         video_group = QGroupBox("[VID] Video & Audio")
@@ -1042,8 +1051,10 @@ class SettingsDialog(QDialog):
         self.chk_stat.setChecked(s["static_fx"])
         video_layout.addRow(self.chk_stat)
         
-        layout.addWidget(video_group)
-        
+        row = 0
+        col = 0
+        layout.addWidget(video_group, row, col)
+
         # Scheduling Settings Group
         sched_group = QGroupBox("[SCHED] Scheduling")
         sched_layout = QFormLayout(sched_group)
@@ -1066,8 +1077,10 @@ class SettingsDialog(QDialog):
         self.ad_break_len.setSuffix(" minutes")
         sched_layout.addRow("Ad Break Length:", self.ad_break_len)
         
-        layout.addWidget(sched_group)
-        
+        layout.addWidget(sched_group, row, col + 1)
+        row += 1
+        col = 0
+
         # Web Remote Settings
         web_group = QGroupBox("[WEB] Web Remote")
         web_layout = QFormLayout(web_group)
@@ -1077,14 +1090,16 @@ class SettingsDialog(QDialog):
         self.web_port.setValue(s.get("web_port", 5050))
         web_layout.addRow("Web Remote Port:", self.web_port)
         
-        layout.addWidget(web_group)
+        layout.addWidget(web_group, row, col)
 
         # Weather Settings
         weather_group = QGroupBox("[WEATHER] Forecast")
         weather_layout = QFormLayout(weather_group)
         self.weather_loc = QLineEdit(s.get("weather_location", "Norfolk"))
         weather_layout.addRow("Location:", self.weather_loc)
-        layout.addWidget(weather_group)
+        layout.addWidget(weather_group, row, col + 1)
+        row += 1
+        col = 0
 
         # Theme Settings
         theme_group = QGroupBox("[LOOK] Theme")
@@ -1099,7 +1114,7 @@ class SettingsDialog(QDialog):
         self.font_combo.setCurrentFont(QFont(s.get("font", "Consolas")))
         theme_layout.addRow("Font:", self.font_combo)
 
-        layout.addWidget(theme_group)
+        layout.addWidget(theme_group, row, col)
 
         # Advanced Settings Group
         advanced_group = QGroupBox("[ADV] Advanced")
@@ -1109,7 +1124,8 @@ class SettingsDialog(QDialog):
         self.cache_clear.clicked.connect(self._clear_cache)
         advanced_layout.addRow(self.cache_clear)
 
-        layout.addWidget(advanced_group)
+        layout.addWidget(advanced_group, row, col + 1)
+        row += 1
 
         # File Locations
         file_group = QGroupBox("[FILES] Data Files")
@@ -1147,13 +1163,13 @@ class SettingsDialog(QDialog):
         icon_row.addWidget(browse_icon)
         file_layout.addRow("Tray Icon:", icon_row)
 
-        layout.addWidget(file_group)
-        
+        layout.addWidget(file_group, row, 0, 1, 2)
+
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        layout.addWidget(buttons, row + 1, 0, 1, 2)
         
     def _clear_cache(self):
         try:
@@ -2311,10 +2327,10 @@ class GuideWidget(QWidget):
         self.base_icon_size = 48
         self.table.setIconSize(QSize(self.base_icon_size, self.base_icon_size))
 
-        self.base_table_font_size = 11
-        self.base_header_font_size = 11
+        self.base_table_font_size = 14
+        self.base_header_font_size = 14
         self.zoom_level = int(self.tv.settings.get("guide_zoom", 0))
-        self.max_zoom_level = 3
+        self.max_zoom_level = 5
         self._apply_zoom()
 
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -2503,7 +2519,7 @@ class GuideWidget(QWidget):
                 occupied_cols.add(col)
             
             # Create cell
-            display_name = "[AD] ADS" if is_ad else format_show_name(Path(program_path))
+            display_name = "[AD] ADS" if is_ad else format_guide_title(Path(program_path))
             duration_mins = duration_ms // 60000
             
             if duration_mins > 0:
@@ -4774,7 +4790,15 @@ class TVPlayer(QMainWindow):
             self.theme_name = self.settings.get("theme", "Matrix")
             self.font_family = self.settings.get("font", "Consolas")
             self.theme_colors = THEMES.get(self.theme_name, THEMES["Matrix"])
+            theme_changed = (
+                old_settings.get("theme") != self.theme_name or
+                old_settings.get("font") != self.font_family
+            )
             self._apply_theme()
+            if theme_changed:
+                self._show_loading("Applying theme...")
+                self.guide.refresh()
+                self._hide_loading()
 
             # Apply volume immediately
             self.player.setVolume(self.settings["default_volume"])
