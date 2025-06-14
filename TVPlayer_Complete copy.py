@@ -139,11 +139,32 @@ THEMES = {
         "hover": "#004400",
     },
     "Orange": {
-        "fg": "#ff8c00",
-        "bg": "#2b1100",
-        "alt": "#331400",
-        "accent": "#ffbf00",
-        "hover": "#552200",
+        "fg": "#ff8800",
+        "bg": "#331800",
+        "alt": "#4d2100",
+        "accent": "#ffaa00",
+        "hover": "#663000",
+    },
+    "Blue": {
+        "fg": "#00ccff",
+        "bg": "#001a33",
+        "alt": "#002b4d",
+        "accent": "#3399ff",
+        "hover": "#003d66",
+    },
+    "Red": {
+        "fg": "#ff5555",
+        "bg": "#330000",
+        "alt": "#4d0000",
+        "accent": "#ff8888",
+        "hover": "#660000",
+    },
+    "Yellow": {
+        "fg": "#ffd700",
+        "bg": "#332b00",
+        "alt": "#4d3f00",
+        "accent": "#ffea00",
+        "hover": "#665500",
     },
     "Pink": {
         "fg": "#ff69b4",
@@ -2211,67 +2232,14 @@ class GuideWidget(QWidget):
         self.tv = tv
         self.setObjectName("tvguide")
         
-        # Apply Matrix theme
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #000000;
-                color: #00ff00;
-            }
-            QGroupBox {
-                font-weight: bold;
-                font-size: 14px;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                border-radius: 6px;
-                margin-top: 6px;
-                padding: 10px;
-                background: rgba(0, 255, 0, 0.05);
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-            QLabel {
-                color: #00ff00;
-            }
-            QTableWidget {
-                background: #001100;
-                color: #00ff00;
-                font: 11px "Consolas", monospace;
-                gridline-color: #003300;
-                selection-background-color: #00ff00;
-                selection-color: #000000;
-                border: 2px solid #00ff00;
-            }
-            QTableWidget::item {
-                padding: 4px;
-                border: 1px solid #003300;
-                background-clip: padding;
-            }
-            QHeaderView::section {
-                background: #002200;
-                color: #00ff00;
-                font-weight: bold;
-                padding: 6px;
-                border: 1px solid #00ff00;
-            }
-            QMenu {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-            }
-            QMenu::item:selected {
-                background-color: #003300;
-            }
-        """)
+        self.apply_theme()
         
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
 
         self.label_base_style = (
-            "padding:4px 8px;border:2px solid #00ff00;"
+            "padding:4px 8px;border:2px solid {fg};"
             "border-radius:4px;font-size:14px;font-weight:bold;"
         )
         self.remote_label = QLabel("REMOTE: ?")
@@ -2290,9 +2258,9 @@ class GuideWidget(QWidget):
         self.time_label = QLabel()
         self.weather_label = QLabel("Weather: ...")
         self.weather_label.setAlignment(Qt.AlignCenter)
-        self.remote_label.setStyleSheet(f"{self.label_base_style} color:#00ff00;")
-        self.net_label.setStyleSheet(f"{self.label_base_style} color:#00ff00;")
-        self.weather_label.setStyleSheet(f"{self.label_base_style} color:#00ff00;")
+        self.remote_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
+        self.net_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
+        self.weather_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
         self.refresh_label = QLabel("<u>refresh</u>")
         self.refresh_label.setCursor(Qt.PointingHandCursor)
         self.refresh_label.mousePressEvent = lambda e: self.update_weather()
@@ -2305,7 +2273,7 @@ class GuideWidget(QWidget):
         wip_panel = QGroupBox("[NEXT] Upcoming Shows")
         wip_layout = QVBoxLayout(wip_panel)
         self.upcoming_label = QLabel("Loading upcoming shows...")
-        self.upcoming_label.setStyleSheet("color: #00ff00; font-size: 12px; padding: 5px; line-height: 1.5;")
+        self.upcoming_label.setStyleSheet(self.tv.css("color: {fg}; font-size: 12px; padding: 5px; line-height: 1.5;"))
         self.upcoming_label.setWordWrap(True)
         wip_layout.addWidget(self.upcoming_label)
 
@@ -2369,17 +2337,71 @@ class GuideWidget(QWidget):
         self.update_weather()
         self.update_status_indicators()
 
+    def apply_theme(self):
+        """Apply current theme to the guide."""
+        self.setStyleSheet(self.tv.css("""
+            QWidget { background-color: {bg}; color: {fg}; }
+            QGroupBox {
+                font-weight: bold;
+                font-size: 14px;
+                color: {fg};
+                border: 2px solid {fg};
+                border-radius: 6px;
+                margin-top: 6px;
+                padding: 10px;
+                background: {hover};
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+            }
+            QLabel { color: {fg}; }
+            QTableWidget {
+                background: {alt};
+                color: {fg};
+                font: 11px "{font}", monospace;
+                gridline-color: {hover};
+                selection-background-color: {accent};
+                selection-color: {bg};
+                border: 2px solid {fg};
+            }
+            QTableWidget::item {
+                padding: 4px;
+                border: 1px solid {hover};
+                background-clip: padding;
+            }
+            QHeaderView::section {
+                background: {hover};
+                color: {fg};
+                font-weight: bold;
+                padding: 6px;
+                border: 1px solid {fg};
+            }
+            QMenu {
+                background-color: {alt};
+                color: {fg};
+                border: 2px solid {fg};
+            }
+            QMenu::item:selected { background-color: {hover}; }
+        """))
+        if hasattr(self, 'remote_label'):
+            self.remote_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
+            self.net_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
+            self.weather_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
+            self.upcoming_label.setStyleSheet(self.tv.css("color: {fg}; font-size: 12px; padding: 5px; line-height: 1.5;"))
+
     def update_status_indicators(self):
         """Update remote and internet status indicators."""
         remote_ok = self.tv.flask_manager.is_running
         remote_color = "#00ff00" if remote_ok else "#ff0000"
         self.remote_label.setText("REMOTE" + (" OK" if remote_ok else " OFF"))
-        self.remote_label.setStyleSheet(f"{self.label_base_style} color: {remote_color};")
+        self.remote_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {remote_color};"))
 
         connected = self._has_net()
         net_color = "#00ff00" if connected else "#ff0000"
         self.net_label.setText("NET" + (" OK" if connected else " OFF"))
-        self.net_label.setStyleSheet(f"{self.label_base_style} color: {net_color};")
+        self.net_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {net_color};"))
 
     def _apply_zoom(self):
         """Apply zoom settings to table headers and icons."""
@@ -2813,92 +2835,8 @@ class OnDemandWidget(QWidget):
         self.tv = tv
         self.setObjectName("ondemand")
         self.current_selection = None
-        
-        # Apply Matrix theme
-        self.setStyleSheet("""
-            QWidget {
-                background-color: #000000;
-                color: #00ff00;
-            }
-            QLabel {
-                color: #00ff00;
-            }
-            QLineEdit {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                border-radius: 6px;
-                padding: 8px;
-                font-size: 14px;
-            }
-            QLineEdit:focus {
-                border-color: #39ff14;
-                background-color: #002200;
-            }
-            QCheckBox {
-                color: #00ff00;
-                font-weight: bold;
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border: 2px solid #00ff00;
-                background-color: #001100;
-                border-radius: 3px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #00ff00;
-            }
-            QTreeWidget {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                border-radius: 6px;
-                font-size: 12px;
-                selection-background-color: #00ff00;
-                selection-color: #000000;
-            }
-            QTreeWidget::item {
-                padding: 6px;
-                border-bottom: 1px solid #003300;
-            }
-            QTreeWidget::item:selected {
-                background-color: #00ff00;
-                color: #000000;
-            }
-            QTreeWidget::item:hover {
-                background-color: #003300;
-            }
-            QHeaderView::section {
-                background-color: #002200;
-                color: #00ff00;
-                padding: 8px;
-                border: 1px solid #00ff00;
-                font-weight: bold;
-            }
-            QPushButton {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                border-radius: 8px;
-                padding: 12px 24px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #003300;
-                border-color: #39ff14;
-            }
-            QPushButton:pressed {
-                background-color: #004400;
-            }
-            QPushButton:disabled {
-                background-color: #000000;
-                color: #003300;
-                border-color: #003300;
-            }
-        """)
+
+        self.apply_theme()
         
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(10, 10, 10, 10)
@@ -2907,20 +2845,20 @@ class OnDemandWidget(QWidget):
         # Header
         header_layout = QHBoxLayout()
         title_label = QLabel("[TV] ONDEMAND - Browse & Play")
-        title_label.setStyleSheet("""
-            font-size: 24px; 
-            font-weight: bold; 
-            color: #00ff00;
+        title_label.setStyleSheet(self.tv.css("""
+            font-size: 24px;
+            font-weight: bold;
+            color: {fg};
             padding: 10px;
-            text-shadow: 0 0 10px #39ff14;
-        """)
+            text-shadow: 0 0 10px {accent};
+        """))
         header_layout.addWidget(title_label)
         header_layout.addStretch()
         
         # Search and filters
         search_layout = QHBoxLayout()
         search_label = QLabel("[SEARCH] Search:")
-        search_label.setStyleSheet("color: #00ff00; font-weight: bold;")
+        search_label.setStyleSheet(self.tv.css("color: {fg}; font-weight: bold;"))
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Search shows...")
         self.search_box.textChanged.connect(self.filter_content)
@@ -2960,14 +2898,14 @@ class OnDemandWidget(QWidget):
         
         # Info panel
         self.info_panel = QLabel("Select a show to see details")
-        self.info_panel.setStyleSheet("""
-            background-color: rgba(0, 255, 0, 0.1);
-            color: #00ff00;
+        self.info_panel.setStyleSheet(self.tv.css("""
+            background-color: {hover};
+            color: {fg};
             padding: 10px;
-            border: 2px solid #00ff00;
+            border: 2px solid {fg};
             border-radius: 6px;
             font-size: 12px;
-        """)
+        """))
         self.info_panel.setWordWrap(True)
         self.info_panel.setMaximumHeight(80)
         
@@ -2978,13 +2916,104 @@ class OnDemandWidget(QWidget):
         self.play_button.setEnabled(False)
         self.play_button.clicked.connect(self.play_selected)
         self.play_button.setMinimumWidth(150)
-        
+
         controls_layout.addWidget(self.play_button)
-        
+
         main_layout.addLayout(controls_layout)
-        
+
         # Initialize content
         self.refresh_content()
+
+    def apply_theme(self):
+        """Apply current theme colors to the widget."""
+        self.setStyleSheet(self.tv.css("""
+            QWidget { background-color: {bg}; color: {fg}; }
+            QLabel { color: {fg}; }
+            QLineEdit {
+                background-color: {alt};
+                color: {fg};
+                border: 2px solid {fg};
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border-color: {accent};
+                background-color: {hover};
+            }
+            QCheckBox {
+                color: {fg};
+                font-weight: bold;
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid {fg};
+                background-color: {alt};
+                border-radius: 3px;
+            }
+            QCheckBox::indicator:checked {
+                background-color: {accent};
+            }
+            QTreeWidget {
+                background-color: {alt};
+                color: {fg};
+                border: 2px solid {fg};
+                border-radius: 6px;
+                font-size: 12px;
+                selection-background-color: {accent};
+                selection-color: {bg};
+            }
+            QTreeWidget::item {
+                padding: 6px;
+                border-bottom: 1px solid {hover};
+            }
+            QTreeWidget::item:selected {
+                background-color: {accent};
+                color: {bg};
+            }
+            QTreeWidget::item:hover {
+                background-color: {hover};
+            }
+            QHeaderView::section {
+                background-color: {hover};
+                color: {fg};
+                padding: 8px;
+                border: 1px solid {fg};
+                font-weight: bold;
+            }
+            QPushButton {
+                background-color: {alt};
+                color: {fg};
+                border: 2px solid {fg};
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: {hover};
+                border-color: {accent};
+            }
+            QPushButton:pressed {
+                background-color: {accent};
+            }
+            QPushButton:disabled {
+                background-color: {bg};
+                color: {hover};
+                border-color: {hover};
+            }
+        """))
+        if hasattr(self, 'info_panel'):
+            self.info_panel.setStyleSheet(self.tv.css("""
+                background-color: {hover};
+                color: {fg};
+                padding: 10px;
+                border: 2px solid {fg};
+                border-radius: 6px;
+                font-size: 12px;
+            """))
     
     def refresh_content(self):
         """Refresh the content list from all channels."""
@@ -3108,30 +3137,7 @@ class Remote(QWidget):
         self.setWindowTitle("[REM] TV Remote")
         self.setFixedSize(340, 220)
 
-        # Matrix CSS
-        self.setStyleSheet("""
-            QWidget { background-color: #000000; border: 2px solid #00ff00; }
-            QPushButton {
-                color: #00ff00;
-                font-family: "Consolas", monospace;
-                font-size: 18px;
-                font-weight: bold;
-                min-width: 72px;
-                min-height: 48px;
-                background-color: #001100;
-                border: 2px solid #00ff00;
-                border-radius: 8px;
-                margin: 4px;
-            }
-            QPushButton:hover {
-                background-color: #002200;
-                border-color: #39ff14;
-            }
-            QPushButton:pressed {
-                background-color: #003300;
-                border-color: #66ff66;
-            }
-        """)
+        self.apply_theme()
 
         # layout: 3 rows × 4 columns (reorganised for a more logical flow)
         grid = QGridLayout(self)
@@ -3170,24 +3176,37 @@ class Remote(QWidget):
         b.setCursor(Qt.PointingHandCursor)
         return b
 
+    def apply_theme(self):
+        """Apply current theme colors to the remote."""
+        self.setStyleSheet(self.tv.css("""
+            QWidget { background-color: {bg}; border: 2px solid {fg}; }
+            QPushButton {
+                color: {fg};
+                font-family: "{font}", monospace;
+                font-size: 18px;
+                font-weight: bold;
+                min-width: 72px;
+                min-height: 48px;
+                background-color: {alt};
+                border: 2px solid {fg};
+                border-radius: 8px;
+                margin: 4px;
+            }
+            QPushButton:hover {
+                background-color: {hover};
+                border-color: {accent};
+            }
+            QPushButton:pressed {
+                background-color: {accent};
+                border-color: {hover};
+            }
+        """))
+
 class DevRemote(QWidget):
     def __init__(self, tv: 'TVPlayer'):
         super().__init__(None, Qt.Tool | Qt.WindowStaysOnTopHint)
         self.setWindowTitle("[DEV] Developer Remote")
-        self.setStyleSheet("""
-            QWidget { background: #000000; border: 2px solid #00ff00; }
-            QPushButton { 
-                color: #00ff00; 
-                font-size: 14px;
-                min-width: 70px; 
-                min-height: 35px;
-                background: #001100;
-                border: 2px solid #00ff00;
-                border-radius: 4px;
-                margin: 1px;
-            }
-            QPushButton:hover { background: #003300; border-color: #39ff14; }
-        """)
+        self.apply_theme()
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -3203,8 +3222,24 @@ class DevRemote(QWidget):
         
         for text, func in buttons:
             layout.addWidget(QPushButton(text, clicked=func))
-            
+
         self.setFixedHeight(50)
+
+    def apply_theme(self):
+        self.setStyleSheet(self.tv.css("""
+            QWidget { background: {bg}; border: 2px solid {fg}; }
+            QPushButton {
+                color: {fg};
+                font-size: 14px;
+                min-width: 70px;
+                min-height: 35px;
+                background: {alt};
+                border: 2px solid {fg};
+                border-radius: 4px;
+                margin: 1px;
+            }
+            QPushButton:hover { background: {hover}; border-color: {accent}; }
+        """))
 
 class CursorController(QObject):
     """Simple cursor controller for remote navigation."""
@@ -3504,9 +3539,15 @@ class TVPlayer(QMainWindow):
                 " padding: 20px; border-radius: 8px; border: 2px solid {fg};"
                 " font-weight: bold;"
             ))
-        # Rebuild the menu only after the main UI components exist.
         if hasattr(self, 'guide'):
+            self.guide.apply_theme()
             self._build_menu()
+        if hasattr(self, 'ondemand'):
+            self.ondemand.apply_theme()
+        if hasattr(self, 'remote'):
+            self.remote.apply_theme()
+        if hasattr(self, 'dev_remote'):
+            self.dev_remote.apply_theme()
     def css(self, template: str) -> str:
         """Format a stylesheet string using the current theme."""
         return template.format(**self.theme_colors, font=self.font_family)
@@ -4795,9 +4836,10 @@ class TVPlayer(QMainWindow):
                 old_settings.get("theme") != self.theme_name or
                 old_settings.get("font") != self.font_family
             )
-            self._apply_theme()
             if theme_changed:
                 self._show_loading("Applying theme...")
+            self._apply_theme()
+            if theme_changed:
                 self.guide.refresh()
                 self._hide_loading()
 
