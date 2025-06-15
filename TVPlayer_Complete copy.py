@@ -3134,6 +3134,7 @@ class Remote(QWidget):
     """Matrix-inspired floating remote control with improved layout."""
     def __init__(self, tv: 'TVPlayer'):
         super().__init__(None, Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.tv = tv
         self.setWindowTitle("[REM] TV Remote")
         self.setFixedSize(340, 220)
 
@@ -3205,6 +3206,7 @@ class Remote(QWidget):
 class DevRemote(QWidget):
     def __init__(self, tv: 'TVPlayer'):
         super().__init__(None, Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.tv = tv
         self.setWindowTitle("[DEV] Developer Remote")
         self.apply_theme()
         
