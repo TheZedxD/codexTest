@@ -2295,8 +2295,8 @@ class GuideWidget(QWidget):
         self.base_icon_size = 48
         self.table.setIconSize(QSize(self.base_icon_size, self.base_icon_size))
 
-        self.base_table_font_size = 14
-        self.base_header_font_size = 14
+        self.base_table_font_size = 18
+        self.base_header_font_size = 18
         self.zoom_level = int(self.tv.settings.get("guide_zoom", 0))
         self.max_zoom_level = 5
         self._apply_zoom()
@@ -2359,8 +2359,9 @@ class GuideWidget(QWidget):
             QLabel { color: {fg}; }
             QTableWidget {
                 background: {alt};
-                color: {fg};
-                font: 11px "{font}", monospace;
+                color: {accent};
+                font-family: "{font}", monospace;
+                font-weight: bold;
                 gridline-color: {hover};
                 selection-background-color: {accent};
                 selection-color: {bg};
@@ -4650,6 +4651,7 @@ class TVPlayer(QMainWindow):
         else:
             self._update_info_display()
             self.info.show()
+            self.info.raise_()
 
     def toggle_remote(self):
         """Toggle remote control window."""
@@ -4767,6 +4769,7 @@ class TVPlayer(QMainWindow):
         self.info.setText(info_text)
         self.info.adjustSize()
         self.info.move(20, self.height() - self.info.height() - 20)
+        self.info.raise_()
 
     # ── OSD AND VISUAL EFFECTS ──────────────────────────────────
     def _osd(self, text: str, duration: int = 3000, logo: Optional[str] = None):
