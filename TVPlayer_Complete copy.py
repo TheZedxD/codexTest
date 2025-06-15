@@ -4690,6 +4690,10 @@ class TVPlayer(QMainWindow):
             act.triggered.connect(partial(self._tray_switch_channel, idx))
 
         self._tray_menu.addSeparator()
+        self._tray_menu.addAction("[RS] Reload Schedule", lambda checked=False: self.reload_schedule())
+        self._tray_menu.addAction("[RESTART] Restart Web Server", lambda checked=False: self.restart_web_server())
+        self._tray_menu.addAction("[SHARE] Share Network", lambda checked=False: self.show_share_network())
+        self._tray_menu.addSeparator()
         self._tray_menu.addAction("[MUTE] Mute/Unmute", lambda checked=False: self.mute())
         self._tray_menu.addSeparator()
         self._tray_menu.addAction("[PREF] Preferences...", lambda checked=False: self.show_settings())
@@ -5184,10 +5188,10 @@ class TVPlayer(QMainWindow):
         self._populate_recent_menu()
         file_menu.addAction("[SAVED] Manage Saved Folders", self.show_saved_channels_editor)
         file_menu.addSeparator()
+        file_menu.addAction("[SHARE] Share Network", self.show_share_network)
         file_menu.addAction("[EDIT] &TV Network Editor", self.show_network_editor, "Ctrl+E")
         file_menu.addAction("[RELOAD] &Reload Channels", self.reload_channels, "F5")
         file_menu.addSeparator()
-        file_menu.addAction("[QR] &Remote QR Code...", self.show_qr_code)
         file_menu.addAction("[EXIT] E&xit", self.close, "Ctrl+Q")
         
         # Audio/Video Menu
@@ -5444,8 +5448,8 @@ class TVPlayer(QMainWindow):
         dlg = SavedChannelsDialog(self)
         dlg.exec_()
 
-    def show_qr_code(self):
-        """Show QR code generator dialog for the web remote."""
+    def show_share_network(self):
+        """Display a QR code for the current remote URL."""
         url = self.flask_manager.remote_url or f"http://{self.flask_manager.main_ip or 'localhost'}:{self.settings.get('web_port', 5050)}"
         dlg = QRCodeDialog(url, self)
         dlg.exec_()
