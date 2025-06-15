@@ -428,6 +428,9 @@ class FlaskServerManager(QObject):
         self.server_process = None
         self.port = 5050
         self.is_running = False
+        self.local_ips = []
+        self.main_ip = None
+        self.remote_url = None
         
     def start_server(self, port=5050):
         """Start or restart the Flask server."""
@@ -451,6 +454,9 @@ class FlaskServerManager(QObject):
             
             # Get local IPs for user info
             local_ips = self._get_local_ips()
+            self.local_ips = local_ips
+            self.main_ip = next((i for i in local_ips if i != '127.0.0.1'), local_ips[0])
+            self.remote_url = f"http://{self.main_ip}:{port}"
             logging.info(f"[WEB REMOTE] Server started on port {port}")
             for ip in local_ips:
                 logging.info(f"[WEB REMOTE] Access at: http://{ip}:{port}")
@@ -2333,26 +2339,49 @@ class GuideWidget(QWidget):
         self.net_label.setAlignment(Qt.AlignCenter)
 
         self.info_box = QGroupBox()
-        info_layout = QVBoxLayout(self.info_box)
+        info_layout = QHBoxLayout(self.info_box)
         info_layout.setContentsMargins(5, 5, 5, 5)
-        info_layout.setSpacing(2)
-        top_row = QHBoxLayout()
-        top_row.addWidget(self.remote_label)
-        top_row.addWidget(self.net_label)
-        info_layout.addLayout(top_row)
+        info_layout.setSpacing(8)
+
+        # --- Net/Remote panel ---
+        self.status_box = QGroupBox()
+        status_layout = QVBoxLayout(self.status_box)
+        status_layout.setContentsMargins(5, 5, 5, 5)
+        status_layout.setSpacing(2)
+        self.ip_label = QLabel()
+        self.ip_label.setAlignment(Qt.AlignCenter)
+        self.restart_btn = QPushButton("[RESTART]")
+        self.restart_btn.clicked.connect(self.tv.restart_web_server)
+        status_layout.addWidget(self.remote_label)
+        status_layout.addWidget(self.net_label)
+        status_layout.addWidget(self.ip_label)
+        status_layout.addWidget(self.restart_btn, alignment=Qt.AlignCenter)
+
+        # --- Time/Weather panel ---
+        self.time_weather_box = QGroupBox()
+        tw_layout = QVBoxLayout(self.time_weather_box)
+        tw_layout.setContentsMargins(5, 5, 5, 5)
+        tw_layout.setSpacing(2)
         self.time_label = QLabel()
         self.weather_label = QLabel("Weather: ...")
         self.weather_label.setAlignment(Qt.AlignCenter)
-        self.remote_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
-        self.net_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
-        self.weather_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
         self.refresh_label = QLabel("<u>refresh</u>")
         self.refresh_label.setCursor(Qt.PointingHandCursor)
         self.refresh_label.mousePressEvent = lambda e: self.update_weather()
-        info_layout.addWidget(self.time_label, alignment=Qt.AlignCenter)
-        info_layout.addWidget(self.weather_label, alignment=Qt.AlignCenter)
-        info_layout.addWidget(self.refresh_label, alignment=Qt.AlignRight)
-        self.info_box.mousePressEvent = lambda e: self.show_weather_dialog()
+        tw_layout.addWidget(self.time_label, alignment=Qt.AlignCenter)
+        tw_layout.addWidget(self.weather_label, alignment=Qt.AlignCenter)
+        tw_layout.addWidget(self.refresh_label, alignment=Qt.AlignRight)
+        self.time_weather_box.mousePressEvent = lambda e: self.show_weather_dialog()
+
+        info_layout.addWidget(self.status_box)
+        info_layout.addWidget(self.time_weather_box, 1)
+
+        self.remote_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
+        self.net_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
+        self.weather_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}}; font-size:18px;"))
+        self.time_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}}; font-size:18px;"))
+        self.ip_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{accent}}; font-size:12px;"))
+        self.restart_btn.setStyleSheet(self.tv.css("padding:4px 8px;border:2px solid {fg};border-radius:4px;font-weight:bold;"))
         
         # WIP Panel - Enhanced version
         wip_panel = QGroupBox("[NEXT] Upcoming Shows")
@@ -2474,7 +2503,10 @@ class GuideWidget(QWidget):
         if hasattr(self, 'remote_label'):
             self.remote_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
             self.net_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
-            self.weather_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}};"))
+            self.weather_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}}; font-size:18px;"))
+            self.time_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{fg}}; font-size:18px;"))
+            self.ip_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {{accent}}; font-size:12px;"))
+            self.restart_btn.setStyleSheet(self.tv.css("padding:4px 8px;border:2px solid {fg};border-radius:4px;font-weight:bold;"))
             self.upcoming_label.setStyleSheet(self.tv.css("color: {fg}; font-size: 12px; padding: 5px; line-height: 1.5;"))
 
     def update_status_indicators(self):
@@ -2483,6 +2515,11 @@ class GuideWidget(QWidget):
         remote_color = "#00ff00" if remote_ok else "#ff0000"
         self.remote_label.setText("REMOTE" + (" OK" if remote_ok else " OFF"))
         self.remote_label.setStyleSheet(self.tv.css(f"{self.label_base_style} color: {remote_color};"))
+
+        if remote_ok and getattr(self.tv.flask_manager, 'remote_url', None):
+            self.ip_label.setText(self.tv.flask_manager.remote_url)
+        else:
+            self.ip_label.setText("N/A")
 
         connected = self._has_net()
         net_color = "#00ff00" if connected else "#ff0000"
