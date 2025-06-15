@@ -53,7 +53,7 @@ from PyQt5.QtWidgets import (
     QStackedLayout, QSizePolicy, QLineEdit, QGroupBox, QMenu, QTreeWidget,
     QTreeWidgetItem, QSplitter, QInputDialog, QFocusFrame,
     QListWidget, QListWidgetItem, QComboBox, QFontComboBox,
-    QGraphicsDropShadowEffect
+    QGraphicsDropShadowEffect, QScrollArea, QSystemTrayIcon
 )
 from functools import partial
 
@@ -526,9 +526,9 @@ class FlaskServerManager(QObject):
         body{background:var(--bg);color:var(--fg);text-align:center;padding:10px;min-height:100vh}
         h1{margin:20px 0;font-size:24px;text-shadow:var(--shadow);letter-spacing:2px}
         .status{background:var(--grid);border:2px solid var(--border);padding:10px;border-radius:6px;
-                font-weight:bold;box-shadow:var(--shadow);margin-bottom:20px;font-size:14px}
-        .btn{display:block;width:90%;max-width:240px;margin:6px auto;padding:12px;
-             font-size:16px;font-weight:bold;color:var(--fg);background:var(--grid);
+                font-weight:bold;box-shadow:var(--shadow);margin-top:20px;font-size:14px}
+        .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:500px;margin:0 auto}
+        .btn{width:100%;padding:12px;font-size:16px;font-weight:bold;color:var(--fg);background:var(--grid);
              border:2px solid var(--border);border-radius:8px;text-shadow:var(--shadow);
              transition:all .2s;cursor:pointer;letter-spacing:1px}
         .btn:hover{background:var(--grid-hover);transform:scale(1.02);box-shadow:var(--shadow)}
@@ -557,12 +557,25 @@ class FlaskServerManager(QObject):
     <div id="theme-loading" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);color:#fff;font-weight:bold;align-items:center;justify-content:center;z-index:5">Updating theme...</div>
     <div class="matrix-bg"></div>
     <h1>[TV] INFINITE TV CONTROL</h1>
-    <div class="status">[OK] SYSTEM ONLINE</div>
+    <div class="nav-links">
+        <a href="/media">[M] Media Browser</a>
+        <a href="/guide">[G] Channel Guide</a>
+        <a href="/status">[S] System Status</a>
+    </div>
 
-    <button class="btn" onclick="send('play')">[>] PLAY / PAUSE</button>
-
-    <button class="btn" onclick="send('next_channel')">[CH+] CHANNEL UP</button>
-    <button class="btn" onclick="send('prev_channel')">[CH-] CHANNEL DOWN</button>
+    <div class="btn-grid">
+        <button class="btn" onclick="send('play')">[>] PLAY / PAUSE</button>
+        <button class="btn" onclick="send('next_channel')">[CH+] CHANNEL UP</button>
+        <button class="btn" onclick="send('prev_channel')">[CH-] CHANNEL DOWN</button>
+        <button class="btn" onclick="send('guide')">[G] TV GUIDE</button>
+        <button class="btn" onclick="send('ondemand')">[O] ON DEMAND</button>
+        <button class="btn small" onclick="send('last')">[L] LAST CHANNEL</button>
+        <button class="btn small" onclick="send('info')">[i] INFO</button>
+        <button class="btn small" onclick="send('fs')">[F] FULLSCREEN</button>
+        <button class="btn small" onclick="send('restart_server')">[R] RESTART</button>
+        <button class="btn small" onclick="send('reload_schedule')">[RS] RELOAD SCHEDULE</button>
+        <button class="btn small" onclick="send('toggle_subtitles')">[CC] SUBTITLES</button>
+    </div>
 
     <div class="volume-row">
         <button class="btn vol-btn small" onclick="send('cursor_up')">[^] UP</button>
@@ -584,23 +597,8 @@ class FlaskServerManager(QObject):
         </div>
     </div>
 
-
-    <button class="btn" onclick="send('guide')">[G] TV GUIDE</button>
-    <button class="btn" onclick="send('ondemand')">[O] ON DEMAND</button>
-    <button class="btn small" onclick="send('last')">[L] LAST CHANNEL</button>
-
-    <button class="btn small" onclick="send('info')">[i] INFO</button>
-    <button class="btn small" onclick="send('fs')">[F] FULLSCREEN</button>
-    <button class="btn small" onclick="send('restart_server')">[R] RESTART</button>
-    <button class="btn small" onclick="send('reload_schedule')">[RS] RELOAD SCHEDULE</button>
-
-    <div class="nav-links">
-        <a href="/media">[M] Media Browser</a>
-        <a href="/guide">[G] Channel Guide</a>
-        <a href="/status">[S] System Status</a>
-    </div>
-
     <div id="feedback"></div>
+    <div class="status">[OK] SYSTEM ONLINE</div>
 
 <script>
 let fb=document.getElementById('feedback'),tid;
@@ -696,42 +694,51 @@ setInterval(() => {
     <title>Infinite Tv Media Browser</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
-        * {box-sizing:border-box;margin:0;padding:0}
-        body {background:#000;color:#0f0;font-family:Consolas,monospace;padding:10px}
-        h1 {text-align:center;margin:20px 0;color:#0f0;text-shadow:0 0 15px #0f0;
+        :root{
+            --bg:#000000;
+            --grid:#001100;
+            --grid-hover:#002200;
+            --grid-active:#003300;
+            --fg:#00ff00;
+            --border:#00ff00;
+            --accent:#39ff14;
+            --shadow:0 0 8px #39ff14;
+        }
+        * {box-sizing:border-box;margin:0;padding:0;font-family:Consolas,monospace}
+        body {background:var(--bg);color:var(--fg);padding:10px}
+        h1 {text-align:center;margin:20px 0;color:var(--fg);text-shadow:0 0 15px var(--accent);
             font-size:26px;letter-spacing:3px}
         .search-box {width:100%;max-width:600px;margin:0 auto 20px;padding:14px;
-                    background:#001100;border:2px solid #0f0;border-radius:8px;
-                    color:#0f0;font-size:16px;font-family:Consolas,monospace;
-                    box-shadow:0 0 10px #39ff14}
-        .search-box:focus {outline:none;border-color:#39ff14;background:#002200}
+                    background:var(--grid);border:2px solid var(--border);border-radius:8px;
+                    color:var(--fg);font-size:16px;box-shadow:0 0 10px var(--accent)}
+        .search-box:focus {outline:none;border-color:var(--accent);background:var(--grid-hover)}
         .filters {text-align:center;margin:20px 0}
-        .filter-btn {background:#001100;color:#0f0;border:2px solid #0f0;
+        .filter-btn {background:var(--grid);color:var(--fg);border:2px solid var(--border);
                     padding:10px 20px;margin:0 5px;border-radius:6px;cursor:pointer;
                     font-weight:bold;transition:all .2s}
-        .filter-btn:hover {background:#002200;transform:scale(1.05);box-shadow:0 0 10px #39ff14}
-        .filter-btn.active {background:#003300;border-color:#39ff14}
+        .filter-btn:hover {background:var(--grid-hover);transform:scale(1.05);box-shadow:0 0 10px var(--accent)}
+        .filter-btn.active {background:var(--grid-active);border-color:var(--accent)}
         .media-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
                     gap:20px;margin:20px 0}
-        .media-item {background:#001100;border:2px solid #0f0;border-radius:10px;
+        .media-item {background:var(--grid);border:2px solid var(--border);border-radius:10px;
                     padding:20px;transition:all .3s;position:relative;overflow:hidden}
         .media-item::before {content:'';position:absolute;top:0;left:-100%;width:100%;
-                            height:2px;background:linear-gradient(90deg,transparent,#39ff14,transparent);
+                            height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);
                             animation:scan 3s infinite}
         @keyframes scan {to{left:100%}}
         .media-item:hover {transform:translateY(-5px);box-shadow:0 10px 20px rgba(0,255,0,0.4);
-                          background:#002200;border-color:#39ff14}
-        .media-title {font-weight:bold;margin-bottom:10px;color:#39ff14;font-size:16px}
-        .media-info {font-size:13px;color:#0f0;margin:5px 0;opacity:0.9}
-        .play-btn {background:#003300;color:#0f0;border:2px solid #0f0;
+                          background:var(--grid-hover);border-color:var(--accent)}
+        .media-title {font-weight:bold;margin-bottom:10px;color:var(--accent);font-size:16px}
+        .media-info {font-size:13px;color:var(--fg);margin:5px 0;opacity:0.9}
+        .play-btn {background:var(--grid-active);color:var(--fg);border:2px solid var(--border);
                   padding:10px 20px;border-radius:6px;cursor:pointer;margin-top:12px;
                   width:100%;font-weight:bold;transition:all .2s}
-        .play-btn:hover {background:#004400;border-color:#39ff14;transform:scale(1.02);
-                        box-shadow:0 0 15px #39ff14}
-        .back-link {display:inline-block;margin:10px 0;color:#0f0;text-decoration:none;
-                   border:2px solid #0f0;padding:10px 20px;border-radius:6px;
+        .play-btn:hover {background:var(--grid-hover);border-color:var(--accent);transform:scale(1.02);
+                        box-shadow:0 0 15px var(--accent)}
+        .back-link {display:inline-block;margin:10px 0;color:var(--fg);text-decoration:none;
+                   border:2px solid var(--border);padding:10px 20px;border-radius:6px;
                    font-weight:bold;transition:all .2s}
-        .back-link:hover {background:#002200;transform:scale(1.05);box-shadow:0 0 10px #39ff14}
+        .back-link:hover {background:var(--grid-hover);transform:scale(1.05);box-shadow:0 0 10px var(--accent)}
         @media (max-width:600px) {
             .media-grid {grid-template-columns:1fr}
             h1 {font-size:22px}
@@ -834,6 +841,23 @@ async function playMedia(encodedPath) {
 
 document.getElementById('searchBox').addEventListener('input', applyFilters);
 loadMedia();
+
+async function applyThemeFromServer(){
+    try{
+        const r=await fetch('/api/theme');
+        const t=await r.json();
+        const root=document.documentElement;
+        root.style.setProperty('--bg',t.bg);
+        root.style.setProperty('--grid',t.alt);
+        root.style.setProperty('--grid-hover',t.hover);
+        root.style.setProperty('--grid-active',t.accent);
+        root.style.setProperty('--fg',t.fg);
+        root.style.setProperty('--border',t.fg);
+        root.style.setProperty('--accent',t.accent);
+        root.style.setProperty('--shadow','0 0 8px '+t.accent);
+    }catch(e){}
+}
+applyThemeFromServer();
 </script>
 </body>
 </html>
@@ -859,13 +883,22 @@ loadMedia();
     <title>Infinite Tv Guide</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
-        body{background:#000;color:#0f0;font-family:Consolas,monospace;padding:10px}
-        h1{text-align:center;margin:20px 10px;font-size:22px}
+        :root{
+            --bg:#000000;
+            --grid:#001100;
+            --grid-hover:#002200;
+            --grid-active:#003300;
+            --fg:#00ff00;
+            --border:#00ff00;
+            --accent:#39ff14;
+        }
+        body{background:var(--bg);color:var(--fg);font-family:Consolas,monospace;padding:10px}
+        h1{text-align:center;margin:20px 10px;font-size:22px;text-shadow:0 0 8px var(--accent)}
         table{width:100%;border-collapse:collapse;margin-top:10px}
-        th,td{border:1px solid #0f0;padding:6px;text-align:left}
-        th{background:#001100}
-        tr:nth-child(even){background:#001000}
-        a{color:#0f0;text-decoration:none}
+        th,td{border:1px solid var(--border);padding:6px;text-align:left}
+        th{background:var(--grid)}
+        tr:nth-child(even){background:var(--grid-hover)}
+        a{color:var(--fg);text-decoration:none}
     </style>
 </head>
 <body>
@@ -886,6 +919,22 @@ function gotoCh(idx){
     fetch('/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'goto:'+idx})});
 }
 loadGuide();
+
+async function applyThemeFromServer(){
+    try{
+        const r=await fetch('/api/theme');
+        const t=await r.json();
+        const root=document.documentElement;
+        root.style.setProperty('--bg',t.bg);
+        root.style.setProperty('--grid',t.alt);
+        root.style.setProperty('--grid-hover',t.hover);
+        root.style.setProperty('--grid-active',t.accent);
+        root.style.setProperty('--fg',t.fg);
+        root.style.setProperty('--border',t.fg);
+        root.style.setProperty('--accent',t.accent);
+    }catch(e){}
+}
+applyThemeFromServer();
 </script>
 </body>
 </html>
