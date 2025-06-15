@@ -2,3 +2,4 @@ PyQt5
 Flask
 psutil
 requests
+qrcode

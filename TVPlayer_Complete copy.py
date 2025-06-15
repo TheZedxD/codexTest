@@ -59,6 +59,7 @@ from functools import partial
 
 # Flask imports for web server
 from flask import Flask, request, jsonify, render_template_string
+from qr_code_dialog import QRCodeDialog
 from werkzeug.serving import run_simple
 
 # FIXED: Remove duplicate imports and add missing ones
@@ -5186,6 +5187,7 @@ class TVPlayer(QMainWindow):
         file_menu.addAction("[EDIT] &TV Network Editor", self.show_network_editor, "Ctrl+E")
         file_menu.addAction("[RELOAD] &Reload Channels", self.reload_channels, "F5")
         file_menu.addSeparator()
+        file_menu.addAction("[QR] &Remote QR Code...", self.show_qr_code)
         file_menu.addAction("[EXIT] E&xit", self.close, "Ctrl+Q")
         
         # Audio/Video Menu
@@ -5426,9 +5428,10 @@ class TVPlayer(QMainWindow):
         
         logging.info(f"Reloaded {len(self.channels_real)} channels with synchronized schedules")
         self._osd(f"Found {len(self.channels_real)} channels (synchronized)")
-        
+
         if self.ch_idx == 0:
             self.guide.refresh()
+
 
     def show_network_editor(self):
         """Show the TV Network Editor."""
@@ -5439,6 +5442,12 @@ class TVPlayer(QMainWindow):
     def show_saved_channels_editor(self):
         """Open saved channels manager."""
         dlg = SavedChannelsDialog(self)
+        dlg.exec_()
+
+    def show_qr_code(self):
+        """Show QR code generator dialog for the web remote."""
+        url = self.flask_manager.remote_url or f"http://{self.flask_manager.main_ip or 'localhost'}:{self.settings.get('web_port', 5050)}"
+        dlg = QRCodeDialog(url, self)
         dlg.exec_()
 
     # ── WINDOW EVENT HANDLERS ──────────────────────────────────
