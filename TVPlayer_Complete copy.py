@@ -519,6 +519,7 @@ class FlaskServerManager(QObject):
             --grid-active:#003300;
             --fg:#00ff00;
             --border:#00ff00;
+            --accent:#39ff14;
             --shadow:0 0 8px #39ff14;
         }
         *{box-sizing:border-box;font-family:"Consolas",monospace;margin:0;padding:0}
@@ -553,6 +554,7 @@ class FlaskServerManager(QObject):
     </style>
 </head>
 <body>
+    <div id="theme-loading" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);color:#fff;font-weight:bold;align-items:center;justify-content:center;z-index:5">Updating theme...</div>
     <div class="matrix-bg"></div>
     <h1>[TV] INFINITE TV CONTROL</h1>
     <div class="status">[OK] SYSTEM ONLINE</div>
@@ -602,9 +604,35 @@ class FlaskServerManager(QObject):
 
 <script>
 let fb=document.getElementById('feedback'),tid;
+let curTheme=null;
+async function applyThemeFromServer(){
+    try{
+        const r=await fetch('/api/theme');
+        const t=await r.json();
+        if(!curTheme){curTheme=t.theme;}
+        if(curTheme!==t.theme){
+            document.getElementById('theme-loading').style.display='flex';
+        }
+        const root=document.documentElement;
+        root.style.setProperty('--bg',t.bg);
+        root.style.setProperty('--grid',t.alt);
+        root.style.setProperty('--grid-hover',t.hover);
+        root.style.setProperty('--grid-active',t.accent);
+        root.style.setProperty('--fg',t.fg);
+        root.style.setProperty('--border',t.fg);
+        root.style.setProperty('--accent',t.accent);
+        root.style.setProperty('--shadow','0 0 8px '+t.accent);
+        if(curTheme!==t.theme){
+            curTheme=t.theme;
+            setTimeout(()=>{document.getElementById('theme-loading').style.display='none';},500);
+        }
+    }catch(e){}
+}
+applyThemeFromServer();
+setInterval(applyThemeFromServer,10000);
 function send(cmd){
-    fb.textContent='[...] PROCESSING'; 
-    fb.style.color='#39ff14';
+    fb.textContent='[...] PROCESSING';
+    fb.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent')||'#39ff14';
     clearTimeout(tid);
     fetch('/action',{method:'POST',headers:{'Content-Type':'application/json'},
            body:JSON.stringify({cmd})})
@@ -612,7 +640,7 @@ function send(cmd){
     .then(j=>{
         if(j.success) {
             fb.textContent='[OK] '+cmd.toUpperCase()+' EXECUTED';
-            fb.style.color='#00ff00';
+            fb.style.color=getComputedStyle(document.documentElement).getPropertyValue('--fg');
             if(cmd === 'restart_server') {
                 setTimeout(()=>{location.reload()}, 2000);
             }
@@ -625,7 +653,7 @@ function send(cmd){
         fb.textContent='[ERR] CONNECTION LOST';
         fb.style.color='#ff0000';
     });
-    tid=setTimeout(()=>{fb.textContent='';fb.style.color='#00ff00'},3000);
+    tid=setTimeout(()=>{fb.textContent='';fb.style.color=getComputedStyle(document.documentElement).getPropertyValue('--fg')},3000);
 }
 
 // Matrix rain effect
@@ -635,7 +663,7 @@ setInterval(() => {
     let drop = document.createElement('div');
     drop.textContent = chars[Math.floor(Math.random() * chars.length)];
     drop.style.position = 'absolute';
-    drop.style.color = '#00ff00';
+    drop.style.color = getComputedStyle(document.documentElement).getPropertyValue('--fg');
     drop.style.left = Math.random() * 100 + '%';
     drop.style.top = '-20px';
     drop.style.fontSize = Math.random() * 20 + 10 + 'px';
@@ -871,6 +899,14 @@ loadGuide();
             except Exception as e:
                 logging.error(f"Guide API error: {e}")
                 return jsonify([])
+
+        @app.route('/api/theme')
+        def api_theme():
+            """Return current theme colors."""
+            return jsonify({
+                "theme": self.tv_player.theme_name,
+                **self.tv_player.theme_colors,
+            })
 
         @app.route('/status')
         def status_page():
@@ -3137,19 +3173,19 @@ class Remote(QWidget):
         super().__init__(None, Qt.Tool | Qt.WindowStaysOnTopHint)
         self.tv = tv
         self.setWindowTitle("[REM] TV Remote")
-        self.setFixedSize(340, 220)
+        self.setFixedSize(360, 320)
 
         self.apply_theme()
 
-        # layout: 3 rows × 4 columns (reorganised for a more logical flow)
+        # layout: 5 rows × 4 columns including all web remote actions
         grid = QGridLayout(self)
         grid.setSpacing(6)
 
         # Row 0 - navigation controls
-        grid.addWidget(self._btn("HOME",     tv.go_guide),         0, 0)
-        grid.addWidget(self._btn("GUIDE",    tv.go_guide),         0, 1)
+        grid.addWidget(self._btn("GUIDE",    tv.go_guide),         0, 0)
+        grid.addWidget(self._btn("DEMAND",   tv.go_ondemand),      0, 1)
         grid.addWidget(self._btn("INFO",     tv.toggle_info),      0, 2)
-        grid.addWidget(self._btn("DEMAND",   tv.go_ondemand),      0, 3)
+        grid.addWidget(self._btn("FULL",     tv.toggle_fs),        0, 3)
 
         # Row 1 - channel / playback controls
         grid.addWidget(self._btn("CH UP",    lambda: tv.change_channel(1)), 1, 0)
@@ -3157,11 +3193,23 @@ class Remote(QWidget):
         grid.addWidget(self._btn("MUTE",     tv.mute),             1, 2)
         grid.addWidget(self._btn("CH DN",    lambda: tv.change_channel(-1)),1, 3)
 
-        # Row 2 - volume and misc controls
+        # Row 2 - volume and extra controls
         grid.addWidget(self._btn("VOL-",     tv.vol_down),         2, 0)
         grid.addWidget(self._btn("LAST",     tv.go_last_channel),  2, 1)
         grid.addWidget(self._btn("VOL+",     tv.vol_up),           2, 2)
-        grid.addWidget(self._btn("FULL",     tv.toggle_fs),        2, 3)
+        grid.addWidget(self._btn("RESTART",  tv.restart_web_server),2, 3)
+
+        # Row 3 - cursor controls
+        grid.addWidget(self._btn("LEFT",     tv.cursor.left),      3, 0)
+        grid.addWidget(self._btn("UP",       tv.cursor.up),        3, 1)
+        grid.addWidget(self._btn("RIGHT",    tv.cursor.right),     3, 2)
+        grid.addWidget(self._btn("RELOAD",   tv.reload_schedule),  3, 3)
+
+        # Row 4 - more cursor controls
+        grid.addWidget(self._btn("BACK",     tv.cursor.back),      4, 0)
+        grid.addWidget(self._btn("OK",       tv.cursor.select),    4, 1)
+        grid.addWidget(self._btn("DOWN",     tv.cursor.down),      4, 2)
+        grid.addWidget(self._btn("HOME",     tv.go_guide),         4, 3)
 
         # optional neon drop-shadow for extra flair
         glow = QColor(0, 255, 0)
