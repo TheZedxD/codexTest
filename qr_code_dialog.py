@@ -10,6 +10,14 @@ class QRCodeDialog(QDialog):
     def __init__(self, data, parent=None):
         super().__init__(parent)
         self.setWindowTitle("[WEB] Remote QR")
+        if parent and hasattr(parent, "css"):
+            self.setStyleSheet(parent.css(
+                "QDialog {background:{bg};color:{fg};}"
+                "QLabel {color:{fg};}"
+                "QPushButton {background:{alt};color:{fg};border:2px solid {fg};"
+                "padding:6px 12px;font-weight:bold;}"
+                "QPushButton:hover {background:{hover};}"
+            ))
         buf = BytesIO()
         qrcode.make(data).save(buf, format="PNG")
         buf.seek(0)

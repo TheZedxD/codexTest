@@ -1406,43 +1406,7 @@ class NetworkEditor(QMainWindow):
         self.resize(1200, 700)
         self.setWindowIcon(QIcon())
         
-        # Apply Matrix theme
-        self.setStyleSheet("""
-            QMainWindow { background-color: #000000; }
-            QTreeWidget {
-                background-color: #001100; color: #00ff00; border: 2px solid #00ff00; 
-                font-size: 11px; alternate-background-color: #002200;
-            }
-            QTreeWidget::item { 
-                padding: 2px; border-bottom: 1px solid #003300; height: 22px; 
-            }
-            QTreeWidget::item:selected { background-color: #00ff00; color: #000000; }
-            QTreeWidget::item:hover { background-color: #003300; }
-            QHeaderView::section {
-                background-color: #002200; color: #00ff00; padding: 6px; 
-                border: 1px solid #00ff00; font-weight: bold; font-size: 11px;
-            }
-            QLabel { color: #00ff00; padding: 2px; font-size: 11px; }
-            QPushButton {
-                background-color: #001100; color: #00ff00; border: 2px solid #00ff00;
-                padding: 6px 10px; border-radius: 4px; font-weight: bold; font-size: 11px;
-                min-height: 20px; max-height: 26px;
-            }
-            QPushButton:hover { background-color: #003300; border-color: #39ff14; }
-            QPushButton:pressed { background-color: #004400; }
-            QPushButton:checked { background-color: #00ff00; color: #000000; }
-            QSplitter::handle { background-color: #00ff00; width: 3px; }
-            QGroupBox {
-                color: #00ff00; border: 2px solid #00ff00; border-radius: 4px; 
-                margin-top: 8px; font-weight: bold; font-size: 11px; padding-top: 8px;
-            }
-            QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }
-            QStatusBar { background-color: #001100; color: #00ff00; font-size: 10px; border-top: 1px solid #00ff00; }
-            QMenu {
-                background-color: #001100; color: #00ff00; border: 2px solid #00ff00;
-            }
-            QMenu::item:selected { background-color: #003300; }
-        """)
+        self.apply_theme()
         
         # Central widget with compact layout
         central = QWidget()
@@ -2229,6 +2193,33 @@ class NetworkEditor(QMainWindow):
         """Open a path in the system file manager."""
         open_in_file_manager(path)
 
+    def apply_theme(self):
+        """Apply the current theme colors."""
+        self.setStyleSheet(self.tv.css(
+            "QMainWindow { background-color: {bg}; }"
+            "QTreeWidget {background-color: {alt}; color: {fg}; border: 2px solid {fg};"
+            " font-size:11px; alternate-background-color: {hover};}"
+            "QTreeWidget::item {padding:2px; border-bottom:1px solid {hover}; height:22px;}"
+            "QTreeWidget::item:selected {background-color: {fg}; color: {bg};}"
+            "QTreeWidget::item:hover {background-color: {hover};}"
+            "QHeaderView::section {background-color: {hover}; color: {fg}; padding:6px;"
+            " border:1px solid {fg}; font-weight:bold; font-size:11px;}"
+            "QLabel {color:{fg}; padding:2px; font-size:11px;}"
+            "QPushButton {background:{alt}; color:{fg}; border:2px solid {fg};"
+            " padding:6px 10px; border-radius:4px; font-weight:bold; font-size:11px;"
+            " min-height:20px; max-height:26px;}"
+            "QPushButton:hover {background:{hover}; border-color:{accent};}"
+            "QPushButton:pressed {background:{hover};}"
+            "QPushButton:checked {background:{fg}; color:{bg};}"
+            "QSplitter::handle {background:{fg}; width:3px;}"
+            "QGroupBox {color:{fg}; border:2px solid {fg}; border-radius:4px;"
+            " margin-top:8px; font-weight:bold; font-size:11px; padding-top:8px;}"
+            "QGroupBox::title {subcontrol-origin: margin; left:10px; padding:0 5px;}"
+            "QStatusBar {background:{alt}; color:{fg}; font-size:10px; border-top:1px solid {fg};}"
+            "QMenu {background:{alt}; color:{fg}; border:2px solid {fg};}"
+            "QMenu::item:selected {background:{hover};}"
+        ))
+
 # ───────────── Saved Channels Editor ─────────────
 class SavedChannelsDialog(QDialog):
     """Manage saved channel folder list."""
@@ -2239,12 +2230,7 @@ class SavedChannelsDialog(QDialog):
         self.setWindowTitle("[CFG] Saved Channel Folders")
         self.resize(500, 300)
 
-        self.setStyleSheet(
-            "QDialog {background:#000;color:#00ff00;}"
-            "QPushButton {background:#001100;color:#00ff00;border:2px solid #00ff00;padding:6px;font-weight:bold;}"
-            "QPushButton:hover {background:#003300;}"
-            "QListWidget {background:#001100;color:#00ff00;border:2px solid #00ff00;}"
-        )
+        self.apply_theme()
 
         layout = QVBoxLayout(self)
         self.list_widget = QListWidget()
@@ -2304,6 +2290,81 @@ class SavedChannelsDialog(QDialog):
             self.tv.load_channels_folder(item.text())
             self.accept()
 
+    def apply_theme(self):
+        """Apply the current TV theme to this dialog."""
+        self.setStyleSheet(self.tv.css(
+            "QDialog {background:{bg};color:{fg};}"
+            "QPushButton {background:{alt};color:{fg};border:2px solid {fg};"
+            "padding:6px;font-weight:bold;}"
+            "QPushButton:hover {background:{hover};}"
+            "QListWidget {background:{alt};color:{fg};border:2px solid {fg};}"
+        ))
+
+# ───────────── Media List Generator ─────────────
+class MediaListDialog(QDialog):
+    """Display a list of all media across channels."""
+
+    def __init__(self, tv: 'TVPlayer', parent=None):
+        super().__init__(parent)
+        self.tv = tv
+        self.setWindowTitle("[DEV] Media List")
+        self.resize(400, 500)
+        self.setModal(True)
+
+        self.list_widget = QListWidget()
+
+        copy_btn = QPushButton("[COPY ALL]")
+        copy_btn.clicked.connect(self.copy_all)
+        save_btn = QPushButton("[SAVE]")
+        save_btn.clicked.connect(self.save_list)
+        close_btn = QPushButton("[CLOSE]")
+        close_btn.clicked.connect(self.close)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(copy_btn)
+        btn_row.addWidget(save_btn)
+        btn_row.addWidget(close_btn)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.list_widget)
+        layout.addLayout(btn_row)
+
+        self.media: List[str] = []
+        self.populate()
+        self.apply_theme()
+
+    def populate(self):
+        """Load media names into the list widget."""
+        self.list_widget.clear()
+        media = []
+        for ch in discover_channels(ROOT_CHANNELS):
+            media.extend(gather_files(ch / "Shows"))
+            media.extend(gather_files(ch / "Commercials"))
+        names = sorted({format_show_name(p) for p in media})
+        self.media = names
+        self.list_widget.addItems(names)
+
+    def copy_all(self):
+        QApplication.clipboard().setText("\n".join(self.media))
+
+    def save_list(self):
+        data_dir = ROOT_DIR / "data"
+        data_dir.mkdir(exist_ok=True)
+        path = data_dir / "media_list.txt"
+        try:
+            path.write_text("\n".join(self.media), encoding="utf-8")
+            QMessageBox.information(self, "[OK] Saved", f"List saved to {path}")
+        except Exception as e:
+            QMessageBox.warning(self, "[ERR] Error", f"Could not save list: {e}")
+
+    def apply_theme(self):
+        self.setStyleSheet(self.tv.css(
+            "QDialog {background:{bg};color:{fg};}"
+            "QListWidget {background:{alt};color:{fg};border:2px solid {fg};}"
+            "QPushButton {background:{alt};color:{fg};border:2px solid {fg};"
+            "padding:6px;font-weight:bold;}"
+            "QPushButton:hover {background:{hover};}"
+        ))
 # ───────────── Guide widget ─────────────
 class GuideWidget(QWidget):
     """12-hour TV guide with proper time slots and WIP panel."""
@@ -3552,6 +3613,7 @@ class TVPlayer(QMainWindow):
         self.dev_remote = DevRemote(self)
         self.remote.hide()
         self.dev_remote.hide()
+        self.media_list_dialog = None
 
         # Focus highlight for cursor navigation
         self.focus_frame = QFocusFrame(self)
@@ -3686,6 +3748,10 @@ class TVPlayer(QMainWindow):
             self.remote.apply_theme()
         if hasattr(self, 'dev_remote'):
             self.dev_remote.apply_theme()
+        if hasattr(self, 'network_editor'):
+            self.network_editor.apply_theme()
+        if hasattr(self, 'media_list_dialog') and self.media_list_dialog:
+            self.media_list_dialog.apply_theme()
     def css(self, template: str) -> str:
         """Format a stylesheet string using the current theme."""
         # Escape any braces that are not part of recognised placeholders so
@@ -5187,6 +5253,8 @@ class TVPlayer(QMainWindow):
         self.recent_menu = file_menu.addMenu("[RECENT] Recent Folders")
         self._populate_recent_menu()
         file_menu.addAction("[SAVED] Manage Saved Folders", self.show_saved_channels_editor)
+        dev_menu = file_menu.addMenu("[DEV] Development")
+        dev_menu.addAction("[LIST] Media List Generator", self.show_media_list_generator)
         file_menu.addSeparator()
         file_menu.addAction("[SHARE] Share Network", self.show_share_network)
         file_menu.addAction("[EDIT] &TV Network Editor", self.show_network_editor, "Ctrl+E")
@@ -5288,36 +5356,24 @@ class TVPlayer(QMainWindow):
         msg = QMessageBox(self)
         msg.setWindowTitle("[HELP] Quick Help")
         msg.setText(help_text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #000000;
-                color: #00ff00;
-            }
-            QMessageBox QLabel {
-                color: #00ff00;
-                font-family: "Consolas", monospace;
-            }
-            QPushButton {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                padding: 6px 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #003300;
-            }
-        """)
+        msg.setStyleSheet(self.css(
+            "QMessageBox {background-color: {bg}; color: {fg};}"
+            "QMessageBox QLabel {color: {fg}; font-family: '{font}', monospace;}"
+            "QPushButton {background-color: {alt}; color: {fg}; border: 2px solid {fg};"
+            "padding: 6px 12px; font-weight: bold;}"
+            "QPushButton:hover {background-color: {hover};}"
+        ))
         msg.exec_()
 
     def show_about(self):
         """Show enhanced about dialog."""
+        t = self.theme_colors
         about_text = f"""
-<h2 style="color: #00ff00;">[TV] Infinite Tv</h2>
+<h2 style="color: {t['fg']};">[TV] Infinite Tv</h2>
 <p><b>Version:</b> r45-COMPLETE FIXED EDITION v4 - TRUE LIVE TV</p>
 <p><b>Release Date:</b> 2025-06-02</p>
 
-<h3 style="color: #00ff00;">[NEW] True Live TV Implementation:</h3>
+<h3 style="color: {t['fg']};">[NEW] True Live TV Implementation:</h3>
 <ul>
 <li>[OK] FIXED: All channels run simultaneously from synchronized schedule</li>
 <li>[OK] FIXED: Channel switching joins programs already in progress</li>
@@ -5326,7 +5382,7 @@ class TVPlayer(QMainWindow):
 <li>[OK] ENHANCED: Debug logging for playback positioning</li>
 </ul>
 
-<h3 style="color: #00ff00;">[PREV] Previous Fixes:</h3>
+<h3 style="color: {t['fg']};">[PREV] Previous Fixes:</h3>
 <ul>
 <li>[OK] Single-click next video navigation</li>
 <li>[OK] Sequential video playback (no random order)</li>
@@ -5337,7 +5393,7 @@ class TVPlayer(QMainWindow):
 <li>[OK] Web remote IP popup at startup</li>
 </ul>
 
-<h3 style="color: #00ff00;">[FEATURES] Core Features:</h3>
+<h3 style="color: {t['fg']};">[FEATURES] Core Features:</h3>
 <ul>
 <li>[OK] TRUE LIVE TV - All channels synchronized like broadcast TV</li>
 <li>[OK] Sequential TV playback with optional ad breaks</li>
@@ -5349,39 +5405,27 @@ class TVPlayer(QMainWindow):
 <li>[OK] Channel logos</li>
 </ul>
 
-<h3 style="color: #00ff00;">[INFO] System Info:</h3>
+<h3 style="color: {t['fg']};">[INFO] System Info:</h3>
 <p><b>Channels:</b> {len(self.channels_real)} loaded</p>
 <p><b>Current Channel:</b> {self.ch_idx}</p>
 <p><b>Web Server:</b> {'Running' if self.flask_manager.is_running else 'Stopped'}</p>
 <p><b>Schedule Start:</b> {self.global_schedule_start.strftime('%Y-%m-%d %H:%M')}</p>
 <p><b>Uptime:</b> {str(datetime.now() - self.startup_time).split('.')[0]}</p>
 
-<p style="color: #39ff14;"><b>[C] 2025 Infinite Tv Project - True Live TV Edition</b></p>
+<p style="color: {t['accent']};"><b>[C] 2025 Infinite Tv Project - True Live TV Edition</b></p>
         """
-        
+
         msg = QMessageBox(self)
         msg.setWindowTitle("[ABOUT] About Infinite Tv")
         msg.setTextFormat(Qt.RichText)
         msg.setText(about_text)
-        msg.setStyleSheet("""
-            QMessageBox {
-                background-color: #000000;
-                color: #00ff00;
-            }
-            QMessageBox QLabel {
-                color: #00ff00;
-            }
-            QPushButton {
-                background-color: #001100;
-                color: #00ff00;
-                border: 2px solid #00ff00;
-                padding: 6px 12px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #003300;
-            }
-        """)
+        msg.setStyleSheet(self.css(
+            "QMessageBox {background-color: {bg}; color: {fg};}"
+            "QMessageBox QLabel {color: {fg};}"
+            "QPushButton {background-color: {alt}; color: {fg}; border: 2px solid {fg};"
+            "padding: 6px 12px; font-weight: bold;}"
+            "QPushButton:hover {background-color: {hover};}"
+        ))
         msg.exec_()
 
     # ── FILE OPERATIONS ──────────────────────────────────
@@ -5447,6 +5491,16 @@ class TVPlayer(QMainWindow):
         """Open saved channels manager."""
         dlg = SavedChannelsDialog(self)
         dlg.exec_()
+
+    def show_media_list_generator(self):
+        """Open the media list generator window."""
+        if not hasattr(self, 'media_list_dialog') or self.media_list_dialog is None:
+            self.media_list_dialog = MediaListDialog(self)
+        else:
+            self.media_list_dialog.populate()
+        self.media_list_dialog.show()
+        self.media_list_dialog.raise_()
+        self.media_list_dialog.activateWindow()
 
     def show_share_network(self):
         """Display a QR code for the current remote URL."""
