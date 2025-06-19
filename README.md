@@ -5,6 +5,18 @@ platform to install dependencies and create the initial folder structure.
 The application is tested on both Windows and Linux and should work out of
 the box on either system.
 
+## Prerequisites
+
+* **Python 3.10+** – ensure `python3` is in your `PATH`
+* **pip** – Python package installer
+* **ffmpeg** *(optional)* – used for accurate media durations
+* **Git** *(optional but recommended)* – for updating the code
+* **Visual Studio Code** – editor with the **Python** extension installed
+
+On Linux install these via your package manager. On Windows download the
+latest releases from their official websites and check the option to add
+Python and Git to your system `PATH`.
+
 ## Linux Install
 
 Run the installer from a terminal:
@@ -33,6 +45,20 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 The Windows installer performs the same steps as the Linux script and works in
 PowerShell. Administrator permissions are not required.
 
+## Working in Visual Studio Code
+
+1. **Open the folder** – Launch VS Code and choose **File → Open Folder...**
+   to select the repository directory.
+2. **Install the Python extension** – If prompted, allow VS Code to install the
+   recommended extension which provides linting and debugging features.
+3. **Select the interpreter** – Press `Ctrl+Shift+P` and run `Python: Select
+   Interpreter`. Choose your Python 3 installation.
+4. **Install dependencies** – Open the integrated terminal (`Terminal → New
+   Terminal`) and run the installer for your platform (`bash install.sh` on
+   Linux or `powershell -ExecutionPolicy Bypass -File install.ps1` on Windows).
+5. **Run the program** – Use the terminal to execute `python "TVPlayer_Complete
+   copy.py"` or press <kbd>F5</kbd> to start a debug session.
+
 ## Running Infinite Tv
 
 After installation launch the player with:
@@ -60,6 +86,23 @@ The TV guide now includes a small panel in the top-right corner showing the
 current system time and local weather when internet access is available. Click
 the panel or the `refresh` link to update the information or view the day's
 forecast. Use the **Settings** menu to set your preferred weather location.
+
+## Updating Infinite Tv
+
+If you obtained the program from a Git repository you can update it by pulling
+the latest changes:
+
+```bash
+git pull
+```
+
+After updating re-run the installer to fetch any new Python packages:
+
+```bash
+bash install.sh     # or install.ps1 on Windows
+```
+
+Your existing channel folders and configuration files will be preserved.
 
 ## Troubleshooting
 
