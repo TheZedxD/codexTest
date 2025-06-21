@@ -580,6 +580,7 @@ class FlaskServerManager(QObject):
         <button class="btn small" onclick="send('info')">[i] INFO</button>
         <button class="btn small" onclick="send('fs')">[F] FULLSCREEN</button>
         <button class="btn small" onclick="send('restart_server')">[R] RESTART</button>
+        <button class="btn small" onclick="send('restart_app')">[RP] RESTART APP</button>
         <button class="btn small" onclick="send('reload_schedule')">[RS] RELOAD SCHEDULE</button>
         <button class="btn small" onclick="send('toggle_subtitles')">[CC] SUBTITLES</button>
     </div>
@@ -646,7 +647,7 @@ function send(cmd){
         if(j.success) {
             fb.textContent='[OK] '+cmd.toUpperCase()+' EXECUTED';
             fb.style.color=getComputedStyle(document.documentElement).getPropertyValue('--fg');
-            if(cmd === 'restart_server') {
+            if(cmd === 'restart_server' || cmd === 'restart_app') {
                 setTimeout(()=>{location.reload()}, 2000);
             }
         } else {
@@ -982,6 +983,9 @@ applyThemeFromServer();
                 if cmd == 'restart_server':
                     # Signal restart (handled by main thread)
                     self.tv_player.signal_bridge.restart_server_requested.emit()
+                    return jsonify({"success": True, "command": cmd})
+                elif cmd == 'restart_app':
+                    self.tv_player.signal_bridge.command_received.emit('restart_app')
                     return jsonify({"success": True, "command": cmd})
                 elif cmd == 'play_media':
                     path = data.get('path')
@@ -3534,6 +3538,8 @@ class TVPlayer(QMainWindow):
         # Keep track of last show order per channel to avoid identical
         # shuffles when rebuilding schedules
         self._last_show_order: Dict[Path, List[str]] = {}
+        # Track first 2-hour block of previous schedule
+        self._last_first_block: Dict[Path, List[str]] = {}
 
         # Global schedule start time - all channels sync to this (midnight today for consistency)
         self.global_schedule_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -3557,6 +3563,7 @@ class TVPlayer(QMainWindow):
         # Load previous shuffle order for each channel if available
         for ch in self.channels_real:
             self._last_show_order[ch] = self._load_last_order(ch)
+            self._last_first_block[ch] = self._load_first_block(ch)
 
         # Apply icon from settings or first channel
         self._apply_app_icon()
@@ -3843,6 +3850,16 @@ class TVPlayer(QMainWindow):
         QTimer.singleShot(100, lambda: self.flask_manager.restart_server())
         self._osd("Web Server Restarting...")
         QTimer.singleShot(500, self.guide.update_status_indicators)
+        QTimer.singleShot(500, self.guide.refresh)
+
+    def reload_program(self):
+        """Restart the entire application."""
+        self._osd("Program Restarting...")
+        QTimer.singleShot(200, self._restart_process)
+
+    def _restart_process(self):
+        python = sys.executable
+        os.execv(python, [python] + sys.argv)
 
     def get_all_media_for_api(self) -> List[Dict]:
         """Get all media files for the API."""
@@ -3988,7 +4005,8 @@ class TVPlayer(QMainWindow):
                 "cursor_left": self.cursor.left,
                 "cursor_right": self.cursor.right,
                 "cursor_ok": self.cursor.select,
-                "cursor_back": self.cursor.back
+                "cursor_back": self.cursor.back,
+                "restart_app": self.reload_program
             }
             
             if cmd in commands:
@@ -4018,65 +4036,67 @@ class TVPlayer(QMainWindow):
         prev_order = self._last_show_order.get(channel)
         if prev_order is None:
             prev_order = self._load_last_order(channel)
+        prev_first = self._last_first_block.get(channel)
+        if prev_first is None:
+            prev_first = self._load_first_block(channel)
+
         attempts = 0
+        schedule = []
+        first_block = []
+        current_order = []
         while attempts < 5:
             random.shuffle(shows)
-            if [str(s) for s in shows] != prev_order or len(shows) < 2:
+            current_order = [str(s) for s in shows]
+            random.shuffle(ads)
+
+            if not shows:
+                logging.warning(f"No shows found for channel {channel.name}")
+                return []
+
+            schedule.clear()
+            current_time = self.global_schedule_start
+            end_time = current_time + timedelta(hours=48)
+            show_index = 0
+            ad_index = 0
+            first_block = []
+            elapsed = 0
+
+            while current_time < end_time:
+                show = shows[show_index % len(shows)]
+                show_duration = self._get_duration(show)
+                schedule.append((current_time, str(show), show_duration, False))
+                if elapsed < 2 * 60 * 60 * 1000:
+                    first_block.append(str(show))
+                    elapsed += show_duration
+                current_time += timedelta(milliseconds=show_duration)
+                show_index += 1
+
+                if ads and show_index % 2 == 0:
+                    ad_break_duration = self.settings.get("ad_break_minutes", 3) * 60 * 1000
+                    remaining_time = ad_break_duration
+                    while remaining_time > 0 and ads:
+                        ad = ads[ad_index % len(ads)]
+                        ad_duration = min(self._get_duration(ad), remaining_time)
+                        segment_info = {
+                            'path': str(ad),
+                            'start_offset': 0,
+                            'duration': ad_duration
+                        }
+                        segment_json = json.dumps(segment_info)
+                        schedule.append((current_time, segment_json, ad_duration, True))
+                        current_time += timedelta(milliseconds=ad_duration)
+                        remaining_time -= ad_duration
+                        ad_index += 1
+
+            if (first_block != prev_first) and (current_order != prev_order):
                 break
             attempts += 1
-        current_order = [str(s) for s in shows]
+
         self._last_show_order[channel] = current_order
         self._save_last_order(channel, current_order)
+        self._last_first_block[channel] = first_block
+        self._save_first_block(channel, first_block)
 
-        random.shuffle(ads)
-        
-        if not shows:
-            logging.warning(f"No shows found for channel {channel.name}")
-            return []
-        
-        schedule = []
-        # Use global schedule start time so all channels are synchronized
-        current_time = self.global_schedule_start
-        end_time = current_time + timedelta(hours=48)  # 48 hour schedule
-        
-        show_index = 0
-        ad_index = 0
-        
-        # Build schedule sequentially
-        while current_time < end_time:
-            # Get next show in order
-            show = shows[show_index % len(shows)]
-            show_duration = self._get_duration(show)
-            
-            # Add show
-            schedule.append((current_time, str(show), show_duration, False))
-            current_time += timedelta(milliseconds=show_duration)
-            show_index += 1
-            
-            # Add ad break if we have ads
-            if ads and show_index % 2 == 0:  # Add ads every 2 shows
-                # Add ad break
-                ad_break_duration = self.settings.get("ad_break_minutes", 3) * 60 * 1000
-                remaining_time = ad_break_duration
-                ad_break_start = current_time
-                
-                while remaining_time > 0 and ads:
-                    ad = ads[ad_index % len(ads)]
-                    ad_duration = min(self._get_duration(ad), remaining_time)
-                    
-                    # Create ad segment
-                    segment_info = {
-                        'path': str(ad),
-                        'start_offset': 0,
-                        'duration': ad_duration
-                    }
-                    segment_json = json.dumps(segment_info)
-                    
-                    schedule.append((current_time, segment_json, ad_duration, True))
-                    current_time += timedelta(milliseconds=ad_duration)
-                    remaining_time -= ad_duration
-                    ad_index += 1
-        
         logging.info(f"Built schedule for {channel.name}: {len([s for s in schedule if not s[3]])} shows, {len([s for s in schedule if s[3]])} ads")
         return schedule
 
@@ -4330,13 +4350,9 @@ class TVPlayer(QMainWindow):
         for channel in self.channels_real:
             self.schedules[channel] = self._build_tv_schedule(channel)
         
-        if self.ch_idx == 0:
-            self.guide.refresh()
-        elif self.ch_idx > 1:
-            real_channel_idx = self.ch_idx - 2
-            if real_channel_idx < len(self.channels_real):
-                current_channel = self.channels_real[real_channel_idx]
-                self._tune_to_channel(current_channel)
+        # Always return to the guide after reload
+        self.ch_idx = 0
+        self._show_guide()
         
         self._hide_loading()
         self._osd("Schedules Reloaded")
@@ -4588,6 +4604,24 @@ class TVPlayer(QMainWindow):
         except Exception as e:
             logging.warning(f"Failed to save schedule cache for {channel}: {e}")
 
+    def _load_first_block(self, channel: Path) -> List[str]:
+        """Load first two-hour block for previous schedule."""
+        file = SCHEDULE_DIR / f"{channel.name}_first.json"
+        try:
+            with open(file, 'r') as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def _save_first_block(self, channel: Path, block: List[str]):
+        """Save first two-hour block."""
+        file = SCHEDULE_DIR / f"{channel.name}_first.json"
+        try:
+            with open(file, 'w') as f:
+                json.dump(block, f)
+        except Exception as e:
+            logging.warning(f"Failed to save first block for {channel}: {e}")
+
     def _load_settings(self) -> Dict:
         """Load application settings."""
         settings = QSettings("TVStation", "LiveTV")
@@ -4758,6 +4792,7 @@ class TVPlayer(QMainWindow):
         self._tray_menu.addSeparator()
         self._tray_menu.addAction("[RS] Reload Schedule", lambda checked=False: self.reload_schedule())
         self._tray_menu.addAction("[RESTART] Restart Web Server", lambda checked=False: self.restart_web_server())
+        self._tray_menu.addAction("[RP] Restart Program", lambda checked=False: self.reload_program())
         self._tray_menu.addAction("[SHARE] Share Network", lambda checked=False: self.show_share_network())
         self._tray_menu.addSeparator()
         self._tray_menu.addAction("[MUTE] Mute/Unmute", lambda checked=False: self.mute())
@@ -5285,6 +5320,7 @@ class TVPlayer(QMainWindow):
         remote_submenu.addAction("[WEB] Web &Remote", self.toggle_remote, "Tab")
         remote_submenu.addAction("[DEV] &Developer Remote", self.toggle_dev_remote)
         remote_submenu.addAction("[RESTART] &Restart Web Server", self.restart_web_server)
+        tools_menu.addAction("[RP] Restart Program", self.reload_program)
         tools_menu.addSeparator()
         tools_menu.addAction("[LOG] Show &Console", self.console.show, "Ctrl+`")
         
