@@ -1241,6 +1241,14 @@ class SettingsDialog(QDialog):
         self.cache_clear.clicked.connect(self._clear_cache)
         advanced_layout.addRow(self.cache_clear)
 
+        self.chk_blank = QCheckBox("Start with no channels loaded")
+        self.chk_blank.setChecked(s.get("start_blank", False))
+        advanced_layout.addRow(self.chk_blank)
+
+        self.chk_scramble = QCheckBox("Enable scramble mode")
+        self.chk_scramble.setChecked(s.get("scramble_mode", False))
+        advanced_layout.addRow(self.chk_scramble)
+
         layout.addWidget(advanced_group, row, col + 1)
         row += 1
 
@@ -1325,7 +1333,9 @@ class SettingsDialog(QDialog):
             "cache_file": self.cache_edit.text(),
             "hotkey_file": self.hotkey_edit.text(),
             "channels_dir": self.channels_edit.text(),
-            "tray_icon": self.icon_edit.text()
+            "tray_icon": self.icon_edit.text(),
+            "start_blank": self.chk_blank.isChecked(),
+            "scramble_mode": self.chk_scramble.isChecked()
         }
 
 # ───────────── Hot-key dialog ─────────────
@@ -3506,6 +3516,8 @@ class TVPlayer(QMainWindow):
         "weather_location": "Norfolk",
         "tray_icon": str(ROOT_DIR / "logo.png"),
         "load_last_folder": True,
+        "start_blank": False,
+        "scramble_mode": False,
         "recent_channels": "[]",
         "use_all_commercials_channels": "[]",
         "window_width": 1400,
@@ -3530,7 +3542,12 @@ class TVPlayer(QMainWindow):
         self._apply_theme()
 
         # Load settings and cache
-        self._auto_select_channels_folder()
+        self.start_blank = self.settings.get("start_blank", False)
+        if not self.start_blank:
+            self._auto_select_channels_folder()
+        else:
+            global ROOT_CHANNELS
+            ROOT_CHANNELS = Path(self.settings.get("channels_dir", str(ROOT_CHANNELS)))
         self.cache_file = Path(self.settings.get("cache_file", str(DEFAULT_CACHE_FILE)))
         self.hotkey_file = Path(self.settings.get("hotkey_file", str(DEFAULT_HOTKEY_FILE)))
         self.durations = self._load_cache()
@@ -3556,7 +3573,10 @@ class TVPlayer(QMainWindow):
         self.cursor = CursorController(self)
 
         # Channel discovery
-        self.channels_real = discover_channels(ROOT_CHANNELS)
+        if not self.start_blank:
+            self.channels_real = discover_channels(ROOT_CHANNELS)
+        else:
+            self.channels_real = []
         self.channels = [None, "OnDemand"] + self.channels_real
         self._rebuild_logos()
 
@@ -3680,17 +3700,21 @@ class TVPlayer(QMainWindow):
         logging.info("All channels synchronized to: %s", self.global_schedule_start.strftime('%Y-%m-%d %H:%M'))
         
         # Build initial schedules for all channels
-        self._show_loading("Building schedules...")
-        for i, channel in enumerate(self.channels_real):
-            if channel not in self.schedules:
-                self.schedules[channel] = self._build_tv_schedule(channel)
-                logging.info(
-                    "Built schedule for channel %d/%d: %s",
-                    i + 1,
-                    len(self.channels_real),
-                    channel.name,
-                )
-        self._hide_loading()
+        if self.channels_real:
+            self._show_loading("Building schedules...")
+            if self.settings.get("scramble_mode", False):
+                self._build_scramble_schedules()
+            else:
+                for i, channel in enumerate(self.channels_real):
+                    if channel not in self.schedules:
+                        self.schedules[channel] = self._build_tv_schedule(channel)
+                        logging.info(
+                            "Built schedule for channel %d/%d: %s",
+                            i + 1,
+                            len(self.channels_real),
+                            channel.name,
+                        )
+            self._hide_loading()
         
         QTimer.singleShot(100, lambda: self.change_channel(0))  # Start with guide
         QTimer.singleShot(500, self.show_web_server_info)  # Show IP info after init
@@ -4022,6 +4046,9 @@ class TVPlayer(QMainWindow):
 
     def _build_tv_schedule(self, channel: Path) -> List[Tuple[datetime, str, int, bool]]:
         """Build a TV schedule for a channel - plays videos in order, synchronized across channels."""
+        if self.settings.get("scramble_mode", False):
+            # In scramble mode schedules are built globally
+            return []
         shows = list(gather_files(channel / "Shows"))
         if channel.name in self.settings.get("use_all_commercials_channels", []):
             ads = []
@@ -4100,10 +4127,60 @@ class TVPlayer(QMainWindow):
         logging.info(f"Built schedule for {channel.name}: {len([s for s in schedule if not s[3]])} shows, {len([s for s in schedule if s[3]])} ads")
         return schedule
 
+    def _build_scramble_schedules(self) -> None:
+        """Build completely randomized schedules across all channels."""
+        shows = []
+        ads = []
+        for ch in self.channels_real:
+            shows.extend(gather_files(ch / "Shows"))
+            ads.extend(gather_files(ch / "Commercials"))
+
+        max_duration = 5 * 60 * 60 * 1000  # 5 hours
+        shows = [s for s in shows if self._get_duration(s) <= max_duration]
+        ads = [a for a in ads if self._get_duration(a) <= max_duration]
+
+        random.shuffle(shows)
+        random.shuffle(ads)
+
+        start_times = {ch: self.global_schedule_start for ch in self.channels_real}
+        ad_index = 0
+        show_index = 0
+        while show_index < len(shows):
+            for ch in self.channels_real:
+                if show_index >= len(shows):
+                    break
+                show = shows[show_index]
+                # Avoid back to back repeats on same channel
+                if self.schedules.get(ch) and self.schedules[ch][-1][1] == str(show):
+                    show_index += 1
+                    if show_index >= len(shows):
+                        break
+                    show = shows[show_index]
+                duration = self._get_duration(show)
+                self.schedules.setdefault(ch, []).append((start_times[ch], str(show), duration, False))
+                start_times[ch] += timedelta(milliseconds=duration)
+
+                if ads:
+                    ad = ads[ad_index % len(ads)]
+                    ad_duration = self._get_duration(ad)
+                    self.schedules[ch].append((start_times[ch], str(ad), ad_duration, True))
+                    start_times[ch] += timedelta(milliseconds=ad_duration)
+                    ad_index += 1
+                    if random.random() < 0.5:
+                        ad = ads[ad_index % len(ads)]
+                        ad_duration = self._get_duration(ad)
+                        self.schedules[ch].append((start_times[ch], str(ad), ad_duration, True))
+                        start_times[ch] += timedelta(milliseconds=ad_duration)
+                        ad_index += 1
+                show_index += 1
+
     def get_schedule_for_guide(self, channel: Path, start_time: datetime, hours: int) -> List:
         """Get schedule data for the TV guide."""
         if channel not in self.schedules:
-            self.schedules[channel] = self._build_tv_schedule(channel)
+            if self.settings.get("scramble_mode", False):
+                self._build_scramble_schedules()
+            else:
+                self.schedules[channel] = self._build_tv_schedule(channel)
 
         schedule = self.schedules[channel]
         end_time = start_time + timedelta(hours=hours)
@@ -4123,7 +4200,10 @@ class TVPlayer(QMainWindow):
     def get_current_program(self, channel: Path) -> Optional[Tuple[datetime, str, int, bool, Dict]]:
         """Get the currently playing program for a channel based on synchronized schedule."""
         if channel not in self.schedules:
-            self.schedules[channel] = self._build_tv_schedule(channel)
+            if self.settings.get("scramble_mode", False):
+                self._build_scramble_schedules()
+            else:
+                self.schedules[channel] = self._build_tv_schedule(channel)
         
         now = datetime.now()
         schedule = self.schedules[channel]
@@ -4347,8 +4427,11 @@ class TVPlayer(QMainWindow):
         self.global_schedule_start = datetime.now()
 
         # Rebuild all schedules
-        for channel in self.channels_real:
-            self.schedules[channel] = self._build_tv_schedule(channel)
+        if self.settings.get("scramble_mode", False):
+            self._build_scramble_schedules()
+        else:
+            for channel in self.channels_real:
+                self.schedules[channel] = self._build_tv_schedule(channel)
         
         # Always return to the guide after reload
         self.ch_idx = 0
@@ -5100,7 +5183,7 @@ class TVPlayer(QMainWindow):
             self.sub_label.setFont(QFont(self.font_family, self.settings["subtitle_size"]))
             
             # Check if schedule-affecting settings changed
-            schedule_affecting = ['min_show_minutes', 'ad_break_minutes']
+            schedule_affecting = ['min_show_minutes', 'ad_break_minutes', 'scramble_mode', 'start_blank']
             needs_schedule_reset = any(old_settings.get(key) != self.settings.get(key) for key in schedule_affecting)
 
             if old_settings.get('channels_dir') != self.settings.get('channels_dir'):
@@ -5108,6 +5191,17 @@ class TVPlayer(QMainWindow):
                 ROOT_CHANNELS = Path(self.settings['channels_dir'])
                 ROOT_CHANNELS.mkdir(exist_ok=True)
                 self.reload_channels()
+
+            if old_settings.get('start_blank') != self.settings.get('start_blank'):
+                if self.settings.get('start_blank'):
+                    self.channels_real = []
+                    self.channels = [None, "OnDemand"]
+                    self._rebuild_logos()
+                    self.schedules.clear()
+                    self.guide.refresh()
+                else:
+                    self._auto_select_channels_folder()
+                    self.reload_channels()
 
             # Check if web port changed
             if old_settings.get("web_port") != self.settings.get("web_port"):
@@ -5148,8 +5242,11 @@ class TVPlayer(QMainWindow):
             }
             
             # Rebuild schedules for all channels
-            for channel in self.channels_real:
-                self.schedules[channel] = self._build_tv_schedule(channel)
+            if self.settings.get("scramble_mode", False):
+                self._build_scramble_schedules()
+            else:
+                for channel in self.channels_real:
+                    self.schedules[channel] = self._build_tv_schedule(channel)
             
             # Go to guide
             self.ch_idx = 0
@@ -5493,6 +5590,9 @@ class TVPlayer(QMainWindow):
         ROOT_CHANNELS = Path(folder)
         self.reload_channels()
         self._update_recent_channels(folder)
+        if self.settings.get("start_blank"):
+            self.settings["start_blank"] = False
+            self._save_settings()
         self._osd(f"Channels folder changed to: {ROOT_CHANNELS.name}")
         logging.info(f"Channels folder changed to: {ROOT_CHANNELS}")
 
@@ -5507,8 +5607,11 @@ class TVPlayer(QMainWindow):
         self.global_schedule_start = datetime.now()
         
         # Rebuild all schedules
-        for channel in self.channels_real:
-            self.schedules[channel] = self._build_tv_schedule(channel)
+        if self.settings.get("scramble_mode", False):
+            self._build_scramble_schedules()
+        else:
+            for channel in self.channels_real:
+                self.schedules[channel] = self._build_tv_schedule(channel)
         
         logging.info(f"Reloaded {len(self.channels_real)} channels with synchronized schedules")
         self._osd(f"Found {len(self.channels_real)} channels (synchronized)")
