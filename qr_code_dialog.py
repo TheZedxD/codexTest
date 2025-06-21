@@ -1,4 +1,10 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QFileDialog
+from PyQt5.QtWidgets import (
+    QDialog,
+    QVBoxLayout,
+    QLabel,
+    QPushButton,
+    QFileDialog,
+)
 from PyQt5.QtGui import QPixmap
 import qrcode
 from io import BytesIO
