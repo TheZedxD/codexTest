@@ -28,6 +28,7 @@ import json, math, os, random, re, shutil, subprocess, sys, logging, socket, thr
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+from collections import deque
 import platform
 import ctypes
 import webbrowser
@@ -213,6 +214,12 @@ def probe_duration(path: Path) -> int:
     except Exception as e:
         logging.warning("ffprobe failure (%s) – using dummy duration for %s", e, path)
         return 30_000
+
+def sanitize_filename(name: str) -> str:
+    """Return filename safe for ffprobe and filesystem."""
+    name = re.sub(r'[\\/*?:"<>|]', '', name)
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
 
 def gather_files(dir_: Path, exts=VIDEO_EXTS, recursive: bool = True) -> List[Path]:
     """Return media files from *dir_*.
@@ -2331,12 +2338,15 @@ class MediaListDialog(QDialog):
         copy_btn.clicked.connect(self.copy_all)
         save_btn = QPushButton("[SAVE]")
         save_btn.clicked.connect(self.save_list)
+        clean_btn = QPushButton("[CLEAN NAMES]")
+        clean_btn.clicked.connect(self.clean_names)
         close_btn = QPushButton("[CLOSE]")
         close_btn.clicked.connect(self.close)
 
         btn_row = QHBoxLayout()
         btn_row.addWidget(copy_btn)
         btn_row.addWidget(save_btn)
+        btn_row.addWidget(clean_btn)
         btn_row.addWidget(close_btn)
 
         layout = QVBoxLayout(self)
@@ -2357,6 +2367,23 @@ class MediaListDialog(QDialog):
         names = sorted({format_show_name(p) for p in media})
         self.media = names
         self.list_widget.addItems(names)
+
+    def clean_names(self):
+        """Rename media files to sanitized titles."""
+        if QMessageBox.question(self, "[CONFIRM] Clean Names",
+                                "Sanitize all media filenames?", QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return
+        for ch in discover_channels(ROOT_CHANNELS):
+            for folder in ["Shows", "Commercials"]:
+                for path in gather_files(ch / folder):
+                    clean = sanitize_filename(path.name)
+                    if clean != path.name:
+                        try:
+                            path.rename(path.with_name(clean))
+                        except Exception as e:
+                            logging.warning(f"Failed to rename {path}: {e}")
+        self.populate()
+        QMessageBox.information(self, "[OK] Done", "Filenames cleaned")
 
     def copy_all(self):
         QApplication.clipboard().setText("\n".join(self.media))
@@ -3555,8 +3582,8 @@ class TVPlayer(QMainWindow):
         # Keep track of last show order per channel to avoid identical
         # shuffles when rebuilding schedules
         self._last_show_order: Dict[Path, List[str]] = {}
-        # Track first 2-hour block of previous schedule
-        self._last_first_block: Dict[Path, List[str]] = {}
+        # Track history of first 2-hour blocks to avoid repeats
+        self._last_first_blocks: Dict[Path, deque] = {}
 
         # Global schedule start time - all channels sync to this (midnight today for consistency)
         self.global_schedule_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -3583,7 +3610,7 @@ class TVPlayer(QMainWindow):
         # Load previous shuffle order for each channel if available
         for ch in self.channels_real:
             self._last_show_order[ch] = self._load_last_order(ch)
-            self._last_first_block[ch] = self._load_first_block(ch)
+            self._last_first_blocks[ch] = self._load_first_blocks(ch)
 
         # Apply icon from settings or first channel
         self._apply_app_icon()
@@ -3682,6 +3709,8 @@ class TVPlayer(QMainWindow):
         self._build_menu()
         self.hotkeys = self._load_hotkeys()
         self._bind_keys()
+        self.menuBar().installEventFilter(self)
+        self.setMouseTracking(True)
         
         # Enhanced player signal connections
         self.player.positionChanged.connect(self._on_position_changed)
@@ -4063,9 +4092,9 @@ class TVPlayer(QMainWindow):
         prev_order = self._last_show_order.get(channel)
         if prev_order is None:
             prev_order = self._load_last_order(channel)
-        prev_first = self._last_first_block.get(channel)
-        if prev_first is None:
-            prev_first = self._load_first_block(channel)
+        prev_first_history = self._last_first_blocks.get(channel)
+        if prev_first_history is None:
+            prev_first_history = self._load_first_blocks(channel)
 
         attempts = 0
         schedule = []
@@ -4115,14 +4144,15 @@ class TVPlayer(QMainWindow):
                         remaining_time -= ad_duration
                         ad_index += 1
 
-            if (first_block != prev_first) and (current_order != prev_order):
+            if first_block not in prev_first_history and (current_order != prev_order):
                 break
             attempts += 1
 
         self._last_show_order[channel] = current_order
         self._save_last_order(channel, current_order)
-        self._last_first_block[channel] = first_block
-        self._save_first_block(channel, first_block)
+        prev_first_history.append(first_block)
+        self._last_first_blocks[channel] = prev_first_history
+        self._save_first_blocks(channel, list(prev_first_history))
 
         logging.info(f"Built schedule for {channel.name}: {len([s for s in schedule if not s[3]])} shows, {len([s for s in schedule if s[3]])} ads")
         return schedule
@@ -4687,21 +4717,22 @@ class TVPlayer(QMainWindow):
         except Exception as e:
             logging.warning(f"Failed to save schedule cache for {channel}: {e}")
 
-    def _load_first_block(self, channel: Path) -> List[str]:
-        """Load first two-hour block for previous schedule."""
+    def _load_first_blocks(self, channel: Path) -> deque:
+        """Load history of first blocks for a channel."""
         file = SCHEDULE_DIR / f"{channel.name}_first.json"
         try:
             with open(file, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+                return deque(data, maxlen=2)
         except Exception:
-            return []
+            return deque(maxlen=2)
 
-    def _save_first_block(self, channel: Path, block: List[str]):
-        """Save first two-hour block."""
+    def _save_first_blocks(self, channel: Path, blocks: List[List[str]]):
+        """Save history of first blocks."""
         file = SCHEDULE_DIR / f"{channel.name}_first.json"
         try:
             with open(file, 'w') as f:
-                json.dump(block, f)
+                json.dump(blocks[-2:], f)
         except Exception as e:
             logging.warning(f"Failed to save first block for {channel}: {e}")
 
@@ -4996,10 +5027,20 @@ class TVPlayer(QMainWindow):
         """Toggle fullscreen mode."""
         if self.isFullScreen():
             self.showNormal()
+            self.menuBar().show()
         else:
             self.showFullScreen()
+            self.menuBar().hide()
             
         self._osd("FULLSCREEN " + ("ON" if self.isFullScreen() else "OFF"))
+
+    def eventFilter(self, obj, event):
+        if obj is self.menuBar() and self.isFullScreen():
+            if event.type() == QtCore.QEvent.Enter:
+                self.menuBar().show()
+            elif event.type() == QtCore.QEvent.Leave:
+                self.menuBar().hide()
+        return super().eventFilter(obj, event)
 
     # ── SUBTITLE SYSTEM ──────────────────────────────────
     def _load_subtitles(self, video_path: Path):
@@ -5331,6 +5372,7 @@ class TVPlayer(QMainWindow):
         """Build enhanced application menu."""
         menubar = self.menuBar()
         menubar.clear()
+        menubar.installEventFilter(self)
         
         # Apply theme to menu
         menubar.setStyleSheet(self.css("""
@@ -5380,19 +5422,21 @@ class TVPlayer(QMainWindow):
         
         # File Menu
         file_menu = menubar.addMenu("&File")
-        file_menu.addAction("[OPEN] &Open Channels Folder", self.open_channels_folder, "Ctrl+O")
-        file_menu.addAction("[SELECT] &Select Channels Folder...", self.select_channels_folder)
-        self.recent_menu = file_menu.addMenu("[RECENT] Recent Folders")
+        channels_menu = file_menu.addMenu("[CHANNELS]")
+        channels_menu.addAction("[OPEN] Open Folder", self.open_channels_folder, "Ctrl+O")
+        channels_menu.addAction("[SELECT] Select Folder...", self.select_channels_folder)
+        self.recent_menu = channels_menu.addMenu("[RECENT] Recent Folders")
         self._populate_recent_menu()
-        file_menu.addAction("[SAVED] Manage Saved Folders", self.show_saved_channels_editor)
-        dev_menu = file_menu.addMenu("[DEV] Development")
-        dev_menu.addAction("[LIST] Media List Generator", self.show_media_list_generator)
+        channels_menu.addAction("[SAVED] Manage Saved", self.show_saved_channels_editor)
+        channels_menu.addAction("[RELOAD] Reload Channels", self.reload_channels, "F5")
+
+        file_menu.addAction("[EDIT] TV Network Editor", self.show_network_editor, "Ctrl+E")
+        tools_sub = file_menu.addMenu("[TOOLS]")
+        tools_sub.addAction("[LIST] Media List Generator", self.show_media_list_generator)
+        tools_sub.addAction("[SHARE] Share Network", self.show_share_network)
+
         file_menu.addSeparator()
-        file_menu.addAction("[SHARE] Share Network", self.show_share_network)
-        file_menu.addAction("[EDIT] &TV Network Editor", self.show_network_editor, "Ctrl+E")
-        file_menu.addAction("[RELOAD] &Reload Channels", self.reload_channels, "F5")
-        file_menu.addSeparator()
-        file_menu.addAction("[EXIT] E&xit", self.close, "Ctrl+Q")
+        file_menu.addAction("[EXIT] Exit", self.close, "Ctrl+Q")
         
         # Audio/Video Menu
         av_menu = menubar.addMenu("&Audio/Video")
