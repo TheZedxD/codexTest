@@ -4471,10 +4471,34 @@ class TVPlayer(QMainWindow):
         self._osd("Schedules Reloaded")
 
     # ── ENHANCED CHANNEL NAVIGATION METHODS ──────────────────────────────────
+
+    def _reset_player(self):
+        """Stop playback and clear timers/signals to avoid leaks."""
+        try:
+            if hasattr(self, '_segment_timer') and self._segment_timer:
+                self._segment_timer.stop()
+                self._segment_timer = None
+        except Exception as e:
+            logging.debug(f"Segment timer stop error: {e}")
+
+        if hasattr(self, '_pending_seek'):
+            try:
+                self.player.mediaStatusChanged.disconnect(self._on_media_loaded_for_seek)
+            except Exception:
+                pass
+            delattr(self, '_pending_seek')
+
+        self.player.stop()
+        # Release current media to reduce memory use when switching channels
+        self.player.setMedia(QMediaContent())
+
     def change_channel(self, delta: int):
         """Change to a different channel."""
         if not self.channels:
             return
+
+        # Stop any current playback and clear timers before switching
+        self._reset_player()
             
         prev_idx = self.ch_idx
         self.ch_idx = (self.ch_idx + delta) % len(self.channels)
