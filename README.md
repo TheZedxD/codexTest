@@ -26,8 +26,9 @@ bash install.sh
 ```
 
 The script installs Python packages (including `requests`) and creates
-`Channels/Channel1/Shows` and `Channels/Channel1/Commercials` along with
-`schedules` and `logs`. You may copy your media files during setup when
+`Channels/Channel1/Shows`, `Channels/Channel1/Commercials` and
+`Channels/Channel1/Bumpers` along with `schedules` and `logs`. You may copy
+your media files during setup when
 prompted.
 
 Videos can be organised in subfolders inside the `Shows` or `Commercials`
@@ -43,7 +44,8 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
 The Windows installer performs the same steps as the Linux script and works in
-PowerShell. Administrator permissions are not required.
+PowerShell. A `Bumpers` folder is also created for optional channel branding
+clips. Administrator permissions are not required.
 
 ## Working in Visual Studio Code
 
@@ -71,11 +73,14 @@ The application minimizes to the system tray while running. If a `logo.png`
 image is present in the program directory it will be used as the tray icon on
 both Windows and Linux. Right-click the icon for quick channel selection,
 access to preferences, or to exit the program. Closing the window simply hides
-it in the tray; use **Exit** from the tray menu to quit.
+it in the tray; use **Exit** from the tray menu to quit. Preferences and hotkey
+configuration are available from the consolidated **Menu** in the main window
+as well as from the tray icon.
 
 When starting up or reloading schedules the player displays a short loading
 overlay while rebuilding the guide so the listings always match what is
-actually playing.
+actually playing. Bumper clips placed in the `Bumpers` folders will play before
+and after each commercial break when enabled in Settings.
 
 The built-in web remote is available on the LAN after startup. Open the
 displayed URL in any browser to control playback from another device. Arrow

@@ -1200,6 +1200,11 @@ class SettingsDialog(QDialog):
         self.ad_break_len.setValue(s.get("ad_break_minutes", 3))
         self.ad_break_len.setSuffix(" minutes")
         sched_layout.addRow("Ad Break Length:", self.ad_break_len)
+
+        # Optional bumpers around commercial breaks
+        self.chk_bumpers = QCheckBox("Use bumpers around commercials")
+        self.chk_bumpers.setChecked(s.get("use_bumpers", True))
+        sched_layout.addRow(self.chk_bumpers)
         
         layout.addWidget(sched_group, row, col + 1)
         row += 1
@@ -1333,6 +1338,7 @@ class SettingsDialog(QDialog):
             "static_fx": self.chk_stat.isChecked(),
             "min_show_minutes": self.min_show_len.value(),
             "ad_break_minutes": self.ad_break_len.value(),
+            "use_bumpers": self.chk_bumpers.isChecked(),
             "web_port": self.web_port.value(),
             "weather_location": self.weather_loc.text(),
             "theme": self.theme_combo.currentText(),
@@ -3536,6 +3542,7 @@ class TVPlayer(QMainWindow):
         "static_fx": True,
         "min_show_minutes": 5,
         "ad_break_minutes": 3,
+        "use_bumpers": True,
         "channels_dir": str(ROOT_CHANNELS),
         "web_port": 5050,
         "cache_file": str(DEFAULT_CACHE_FILE),
@@ -4085,6 +4092,9 @@ class TVPlayer(QMainWindow):
                 ads.extend(gather_files(ch / "Commercials"))
         else:
             ads = list(gather_files(channel / "Commercials"))
+        bumpers: List[Path] = []
+        if self.settings.get("use_bumpers", True):
+            bumpers = list(gather_files(channel / "Bumpers"))
 
         # Shuffle content so each schedule rebuild is unique and not identical
         # to the previous shuffle for this channel
@@ -4128,6 +4138,11 @@ class TVPlayer(QMainWindow):
                 show_index += 1
 
                 if ads and show_index % 2 == 0:
+                    if bumpers:
+                        pre = random.choice(bumpers)
+                        pre_dur = self._get_duration(pre)
+                        schedule.append((current_time, str(pre), pre_dur, True))
+                        current_time += timedelta(milliseconds=pre_dur)
                     ad_break_duration = self.settings.get("ad_break_minutes", 3) * 60 * 1000
                     remaining_time = ad_break_duration
                     while remaining_time > 0 and ads:
@@ -4143,6 +4158,11 @@ class TVPlayer(QMainWindow):
                         current_time += timedelta(milliseconds=ad_duration)
                         remaining_time -= ad_duration
                         ad_index += 1
+                    if bumpers:
+                        post = random.choice(bumpers)
+                        post_dur = self._get_duration(post)
+                        schedule.append((current_time, str(post), post_dur, True))
+                        current_time += timedelta(milliseconds=post_dur)
 
             if first_block not in prev_first_history and (current_order != prev_order):
                 break
@@ -4447,6 +4467,16 @@ class TVPlayer(QMainWindow):
 
     def reload_schedule(self):
         """Reload program schedules with synchronized timing."""
+        reply = QMessageBox.question(
+            self,
+            "[RELOAD] Reload Schedules",
+            "Reloading will reset the current program lineup. Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
         self._show_loading("Refreshing schedules...")
 
         # Clear existing schedules
@@ -5444,9 +5474,9 @@ class TVPlayer(QMainWindow):
         program_submenu.addSeparator()
         program_submenu.addAction("[RELOAD] Reload Schedule", self.reload_schedule, "Ctrl+R")
         
-        # File Menu
-        file_menu = menubar.addMenu("&File")
-        channels_menu = file_menu.addMenu("[CHANNELS]")
+        # Consolidated main menu
+        main_menu = menubar.addMenu("&Menu")
+        channels_menu = main_menu.addMenu("[CHANNELS]")
         channels_menu.addAction("[OPEN] Open Folder", self.open_channels_folder, "Ctrl+O")
         channels_menu.addAction("[SELECT] Select Folder...", self.select_channels_folder)
         self.recent_menu = channels_menu.addMenu("[RECENT] Recent Folders")
@@ -5454,13 +5484,16 @@ class TVPlayer(QMainWindow):
         channels_menu.addAction("[SAVED] Manage Saved", self.show_saved_channels_editor)
         channels_menu.addAction("[RELOAD] Reload Channels", self.reload_channels, "F5")
 
-        file_menu.addAction("[EDIT] TV Network Editor", self.show_network_editor, "Ctrl+E")
-        tools_sub = file_menu.addMenu("[TOOLS]")
+        main_menu.addAction("[EDIT] TV Network Editor", self.show_network_editor, "Ctrl+E")
+        tools_sub = main_menu.addMenu("[TOOLS]")
         tools_sub.addAction("[LIST] Media List Generator", self.show_media_list_generator)
         tools_sub.addAction("[SHARE] Share Network", self.show_share_network)
 
-        file_menu.addSeparator()
-        file_menu.addAction("[EXIT] Exit", self.close, "Ctrl+Q")
+        main_menu.addSeparator()
+        main_menu.addAction("[PREF] Preferences...", self.show_settings, "Ctrl+P")
+        main_menu.addAction("[KEYS] Hotkeys...", self.show_hotkeys, "Ctrl+H")
+        main_menu.addSeparator()
+        main_menu.addAction("[EXIT] Exit", self.close, "Ctrl+Q")
         
         # Audio/Video Menu
         av_menu = menubar.addMenu("&Audio/Video")
@@ -5488,11 +5521,6 @@ class TVPlayer(QMainWindow):
         tools_menu.addAction("[RP] Restart Program", self.reload_program)
         tools_menu.addSeparator()
         tools_menu.addAction("[LOG] Show &Console", self.console.show, "Ctrl+`")
-        
-        # Settings Menu
-        settings_menu = menubar.addMenu("&Settings")
-        settings_menu.addAction("[PREF] &Preferences...", self.show_settings, "Ctrl+P")
-        settings_menu.addAction("[KEYS] &Hotkeys...", self.show_hotkeys, "Ctrl+H")
         
         # Help Menu
         help_menu = menubar.addMenu("&Help")
