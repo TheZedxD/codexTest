@@ -24,9 +24,11 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $channels = Join-Path $root 'Channels'
 $shows = Join-Path $channels 'Channel1\Shows'
 $commercials = Join-Path $channels 'Channel1\Commercials'
+$bumpers = Join-Path $channels 'Channel1\Bumpers'
 
 $null = New-Item -ItemType Directory -Force -Path $shows
 $null = New-Item -ItemType Directory -Force -Path $commercials
+$null = New-Item -ItemType Directory -Force -Path $bumpers
 $null = New-Item -ItemType Directory -Force -Path (Join-Path $root 'schedules')
 $null = New-Item -ItemType Directory -Force -Path (Join-Path $root 'logs')
 $dirOk = $true

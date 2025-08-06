@@ -43,7 +43,7 @@ fi
 
 CHANNELS_DIR="$(pwd)/Channels"
 echo "Creating folder structure under $CHANNELS_DIR"
-mkdir -p "$CHANNELS_DIR/Channel1/Shows" "$CHANNELS_DIR/Channel1/Commercials"
+mkdir -p "$CHANNELS_DIR/Channel1/Shows" "$CHANNELS_DIR/Channel1/Commercials" "$CHANNELS_DIR/Channel1/Bumpers"
 mkdir -p "schedules" "logs"
 dir_ok=true
 
