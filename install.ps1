@@ -52,7 +52,7 @@ $shortcut = Join-Path $desktop 'TVPlayer.lnk'
 $wsh = New-Object -ComObject WScript.Shell
 $sc = $wsh.CreateShortcut($shortcut)
 $sc.TargetPath = $venvPython
-$sc.Arguments = "`"$($root)\TVPlayer_Complete copy.py`""
+$sc.Arguments = "`"$($root)\tv.py`""
 $sc.WorkingDirectory = $root
 $iconPath = Join-Path $root 'logo.png'
 if (Test-Path $iconPath) { $sc.IconLocation = $iconPath }
@@ -62,6 +62,6 @@ Write-Host ""
 if ($pkgOk) { Write-Host "$green[✓] Python packages installed$reset" }
 if ($dirOk) { Write-Host "$green[✓] Folder structure created$reset" }
 if ($copyOk) { Write-Host "$green[✓] Media setup complete$reset" }
-Write-Host "$green[✓] Installation complete. Run: `$venvPython `"$root\TVPlayer_Complete copy.py`"$reset"
+Write-Host "$green[✓] Installation complete. Run: `$venvPython `"$root\tv.py`"$reset"
 Write-Host "If a logo.png file exists in this folder it will become the"
 Write-Host "system tray icon when running Infinite Tv."

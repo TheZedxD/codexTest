@@ -11,7 +11,7 @@ def test_install_sh_creates_venv_and_desktop(tmp_path):
     # copy required files to temp working directory
     work = tmp_path / 'work'
     work.mkdir()
-    for fname in ['install.sh', 'requirements.txt', 'TVPlayer_Complete copy.py']:
+    for fname in ['install.sh', 'requirements.txt', 'tv.py']:
         shutil.copy(ROOT / fname, work / fname)
 
     home = tmp_path / 'home'

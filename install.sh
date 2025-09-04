@@ -59,7 +59,7 @@ cat > "$DESKTOP_DIR/TVPlayer.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=TVPlayer
-Exec=$(pwd)/venv/bin/python "$(pwd)/TVPlayer_Complete copy.py"
+Exec=$(pwd)/venv/bin/python "$(pwd)/tv.py"
 Path=$(pwd)
 Icon=$(pwd)/logo.png
 Terminal=false
@@ -69,6 +69,6 @@ chmod +x "$DESKTOP_DIR/TVPlayer.desktop"
 if [ "$pkg_ok" = true ]; then echo -e "${GREEN}[✓] Python packages installed${RESET}"; fi
 if [ "$dir_ok" = true ]; then echo -e "${GREEN}[✓] Folder structure created${RESET}"; fi
 if [ "$copy_ok" = true ]; then echo -e "${GREEN}[✓] Media setup complete${RESET}"; fi
-echo -e "${GREEN}[✓] Installation complete. Run with: $(pwd)/venv/bin/python 'TVPlayer_Complete copy.py'${RESET}"
+echo -e "${GREEN}[✓] Installation complete. Run with: $(pwd)/venv/bin/python 'tv.py'${RESET}"
 echo "If you have a logo.png file in this directory it will be used for the"
 echo "system tray icon on supported desktops."
