@@ -12,7 +12,7 @@ REPO_URL_DEFAULT="https://github.com/TheZedxD/codextest.git"
 REPO_DIR_DEFAULT="codextest"
 
 # If not already inside a repo folder, optionally clone fresh
-if [ ! -f "requirements.txt" ] && [ ! -f "TVPlayer_Complete.py" ] && [ ! -f "TVPlayer_Complete copy.py" ]; then
+if [ ! -f "requirements.txt" ] && [ ! -f "tv.py" ] && [ ! -f "TVPlayer.py" ] && [ ! -f "main.py" ]; then
   echo "Repo files not found here. Cloning fresh."
   REPO_URL="${1:-$REPO_URL_DEFAULT}"
   REPO_DIR="${2:-$REPO_DIR_DEFAULT}"
@@ -64,8 +64,10 @@ fi
 # ---------- 4) Create runtime folders ----------
 echo "[4/6] Creating runtime folders…"
 mkdir -p \
-  cache caches tmp temp logs data assets media downloads \
-  config configs schedules channels images icons thumbnails
+  Channels/Channel1/Shows \
+  Channels/Channel1/Commercials \
+  Channels/Channel1/Bumpers \
+  schedules logs
 
 # ---------- 5) Sanity check QtMultimedia ----------
 echo "[5/6] Verifying QtMultimedia import…"
@@ -84,13 +86,12 @@ PY
 echo "[6/6] Writing run.sh and desktop shortcut…"
 
 # Pick main entrypoint
-pick_main() {
-  for c in \
-    "TVPlayer_Complete copy.py" \
-    "TVPlayer_Complete.py" \
-    "TVPlayer.py" \
-    "main.py" \
-    "app.py"
+  pick_main() {
+    for c in \
+      "tv.py" \
+      "TVPlayer.py" \
+      "main.py" \
+      "app.py"
   do
     [ -f "$c" ] && { echo "$c"; return; }
   done
@@ -116,7 +117,7 @@ export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}
 # Find main file if not set
 MAIN="${MAIN_FILE_PLACEHOLDER}"
 if [ ! -f "$MAIN" ]; then
-  for c in "TVPlayer_Complete copy.py" "TVPlayer_Complete.py" "TVPlayer.py" "main.py" "app.py"; do
+  for c in "tv.py" "TVPlayer.py" "main.py" "app.py"; do
     [ -f "$c" ] && MAIN="$c" && break
   done
 fi
@@ -130,18 +131,17 @@ chmod +x run.sh
 # Desktop shortcut
 DESKTOP_DIR="$HOME/Desktop"
 mkdir -p "$DESKTOP_DIR"
-APP_NAME="CodeXTest TVPlayer"
-cat > "$DESKTOP_DIR/CodeXTest.desktop" <<DESK
+cat > "$DESKTOP_DIR/TVPlayer.desktop" <<DESK
 [Desktop Entry]
 Type=Application
-Name=${APP_NAME}
-Comment=Launch CodeXTest TV Player
+Name=TVPlayer
+Comment=Launch Infinite TV Player
 Exec=$(pwd)/run.sh
 Icon=utilities-terminal
 Terminal=false
 Categories=AudioVideo;Player;
 DESK
-chmod +x "$DESKTOP_DIR/CodeXTest.desktop"
+chmod +x "$DESKTOP_DIR/TVPlayer.desktop"
 
 echo
 echo "=============================="

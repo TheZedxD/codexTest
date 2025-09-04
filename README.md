@@ -58,15 +58,14 @@ clips. Administrator permissions are not required.
 4. **Install dependencies** – Open the integrated terminal (`Terminal → New
    Terminal`) and run the installer for your platform (`bash install.sh` on
    Linux or `powershell -ExecutionPolicy Bypass -File install.ps1` on Windows).
-5. **Run the program** – Use the terminal to execute `python "TVPlayer_Complete
-   copy.py"` or press <kbd>F5</kbd> to start a debug session.
+5. **Run the program** – Use the terminal to execute `python tv.py` or press <kbd>F5</kbd> to start a debug session.
 
 ## Running Infinite Tv
 
 After installation launch the player with:
 
 ```bash
-python "TVPlayer_Complete copy.py"
+python tv.py
 ```
 
 The application minimizes to the system tray while running. If a `logo.png`
