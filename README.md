@@ -17,6 +17,41 @@ On Linux install these via your package manager. On Windows download the
 latest releases from their official websites and check the option to add
 Python and Git to your system `PATH`.
 
+## Steam Deck (Desktop Mode)
+
+Prereqs: Python 3 (preinstalled), network, your media files.
+
+Install (one shot):
+
+```bash
+cd ~/Desktop/TVPlayer   # or wherever you extracted
+chmod +x install_steamdeck.sh
+./install_steamdeck.sh
+```
+
+Launch: double-click **TVPlayer (Infinite TV)** on Desktop, or `./run.sh`.
+
+If video won't play: install system codecs (ffmpeg, GStreamer good/bad/ugly/libav) via Discover or Konsole commands:
+
+```bash
+sudo pacman -S ffmpeg
+sudo pacman -S gstreamer gst-plugins-good
+sudo pacman -S gst-plugins-bad gst-plugins-ugly
+sudo pacman -S gst-libav
+```
+
+Logs: see `logs/errors.log` for crashes.
+
+Media folders: add files to `Channels/Channel1/Shows` to start.
+
+**Gaming Mode (optional):**
+
+Add `run.sh` as a Non-Steam Game.
+
+In Launch Options, set: `QT_QPA_PLATFORM=xcb %command%`
+
+UI/tray is best in Desktop Mode.
+
 ## Linux Install
 
 Run the installer from a terminal:
