@@ -1,5 +1,6 @@
 PyQt5
 Flask
-psutil
 requests
+psutil
 qrcode
+Pillow
