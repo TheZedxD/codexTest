@@ -24,7 +24,7 @@ PyQt "Live TV" player • r45‑COMPLETE STABLE EDITION – 2025‑06‑02
 """
 
 from __future__ import annotations
-import json, math, os, random, re, shutil, subprocess, sys, logging, socket, threading
+import json, math, os, random, re, shutil, subprocess, sys, socket, threading
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
@@ -34,6 +34,17 @@ import ctypes
 import webbrowser
 import signal
 import weakref
+
+APP_ROOT = Path(__file__).resolve().parent
+LOG_DIR = APP_ROOT / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+import logging
+logging.basicConfig(
+    filename=str(LOG_DIR / "errors.log"),
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 
 # Optional: demote quirky HW decoders on some Mint builds
 if sys.platform.startswith('linux'):
@@ -81,17 +92,16 @@ qInstallMessageHandler(_qt_msg)
 VIDEO_EXTS = (".mp4", ".avi", ".mkv", ".mov", ".ts", ".m4v", ".wmv", ".flv", ".webm")
 SUB_EXTS = (".srt", ".ass", ".vtt")
 
-ROOT_DIR = Path(__file__).resolve().parent
-ROOT_CHANNELS = ROOT_DIR / "Channels"
+ROOT_CHANNELS = APP_ROOT / "Channels"
 ROOT_CHANNELS.mkdir(exist_ok=True)
 
 # Default data files (can be changed in settings)
-DEFAULT_CACHE_FILE = ROOT_DIR / "durations.json"
-DEFAULT_HOTKEY_FILE = ROOT_DIR / "hotkeys.json"
+DEFAULT_CACHE_FILE = APP_ROOT / "durations.json"
+DEFAULT_HOTKEY_FILE = APP_ROOT / "hotkeys.json"
 CACHE_FILE = DEFAULT_CACHE_FILE  # backward compatibility
 HOTKEY_FILE = DEFAULT_HOTKEY_FILE
-STATIC_GIF = ROOT_DIR / "static.gif"
-SCHEDULE_DIR = ROOT_DIR / "schedules"
+STATIC_GIF = APP_ROOT / "static.gif"
+SCHEDULE_DIR = APP_ROOT / "schedules"
 SCHEDULE_DIR.mkdir(exist_ok=True)
 
 # TV Constants
@@ -104,16 +114,6 @@ AD_REPEAT_HOURS = 2                    # 2 hour ad repeat
 MIDROLL_AD_DURATION_MS = 3 * 60 * 1000 # 3 minutes mid-roll
 MIDROLL_THRESHOLD_MS = 45 * 60 * 1000  # 45+ min shows get mid-roll
 MOVIE_THRESHOLD_MS = 90 * 60 * 1000    # 90+ min get 2 mid-rolls
-
-# ─── Logging setup ─────────────────────────────────────────────────────────
-LOG_DIR = ROOT_DIR / "logs"
-LOG_DIR.mkdir(exist_ok=True)
-log_file = LOG_DIR / "errors.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s: %(message)s",
-    handlers=[logging.FileHandler(log_file), logging.StreamHandler(sys.__stdout__)]
-)
 
 def _handle_exception(exc_type, exc_value, exc_traceback):
     if issubclass(exc_type, KeyboardInterrupt):
@@ -1074,7 +1074,7 @@ class Console(QDialog):
         try:
             filename, _ = QFileDialog.getSaveFileName(
                 self, "Export Log", 
-                str(ROOT_DIR / f"tv_station_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"),
+                str(APP_ROOT / f"tv_station_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"),
                 "Text Files (*.txt);;All Files (*)"
             )
             if filename:
@@ -1292,7 +1292,7 @@ class SettingsDialog(QDialog):
         chan_row.addWidget(browse_chan)
         file_layout.addRow("Channels Folder:", chan_row)
 
-        self.icon_edit = QLineEdit(s.get("tray_icon", str(ROOT_DIR / "logo.png")))
+        self.icon_edit = QLineEdit(s.get("tray_icon", str(APP_ROOT / "logo.png")))
         browse_icon = QPushButton("[...]")
         browse_icon.clicked.connect(lambda: self._browse_file(self.icon_edit, image=True))
         icon_row = QHBoxLayout()
@@ -2395,7 +2395,7 @@ class MediaListDialog(QDialog):
         QApplication.clipboard().setText("\n".join(self.media))
 
     def save_list(self):
-        data_dir = ROOT_DIR / "data"
+        data_dir = APP_ROOT / "data"
         data_dir.mkdir(exist_ok=True)
         path = data_dir / "media_list.txt"
         try:
@@ -3548,7 +3548,7 @@ class TVPlayer(QMainWindow):
         "cache_file": str(DEFAULT_CACHE_FILE),
         "hotkey_file": str(DEFAULT_HOTKEY_FILE),
         "weather_location": "Norfolk",
-        "tray_icon": str(ROOT_DIR / "logo.png"),
+        "tray_icon": str(APP_ROOT / "logo.png"),
         "load_last_folder": True,
         "start_blank": False,
         "scramble_mode": False,
@@ -4875,7 +4875,7 @@ class TVPlayer(QMainWindow):
 
     def _apply_app_icon(self):
         """Apply application and tray icon based on settings or defaults."""
-        icon_path = Path(self.settings.get("tray_icon", str(ROOT_DIR / "logo.png")))
+        icon_path = Path(self.settings.get("tray_icon", str(APP_ROOT / "logo.png")))
         if not icon_path.exists():
             if self.channels_real:
                 logo = self._find_logo(self.channels_real[0])
