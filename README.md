@@ -19,13 +19,20 @@ Python and Git to your system `PATH`.
 
 ## Steam Deck Quick Start
 
-```bash
-./deck_repair.sh
-./run.sh    # or launch via desktop entry
-```
+1. Install dependencies and repair the environment:
 
-This installs required Python packages and launches the player with sensible
-defaults for the Deck.
+   ```bash
+   ./deck_repair.sh
+   ```
+
+2. Launch the player:
+
+   ```bash
+   ./run.sh            # or use the desktop entry
+   ```
+
+The helper script configures Python packages, creates a launcher and
+sets sensible defaults for the Deck.
 
 ## Steam Deck (Desktop Mode)
 
@@ -155,20 +162,16 @@ Your existing channel folders and configuration files will be preserved.
 
 ## Troubleshooting
 
-Basic GStreamer test:
+- Basic GStreamer test:
 
-```bash
-gst-play-1.0 path/to/video.mp4
-```
+  ```bash
+  gst-play-1.0 path/to/video.mp4
+  ```
 
-If that plays but the app does not, ensure Qt uses X11:
+- If that plays but the app does not, ensure Qt uses X11:
 
-```bash
-export QT_QPA_PLATFORM=xcb
-```
+  ```bash
+  export QT_QPA_PLATFORM=xcb
+  ```
 
-Logs can be found in `logs/errors.log` and `logs/qtmultimedia.log`.
-
-Ensure Python 3 and pip are installed and available in your `PATH`. If the
-installers fail to download packages because your system lacks internet
-access, install the packages listed in `requirements.txt` manually.
+- Logs can be found in `logs/errors.log` and `logs/qtmultimedia.log`.
