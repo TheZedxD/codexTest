@@ -68,6 +68,7 @@ from PyQt5.QtWidgets import (
     QGraphicsDropShadowEffect, QScrollArea, QSystemTrayIcon
 )
 from functools import partial
+from media_diagnostics import MediaDiagnostics
 
 # Flask imports for web server
 from flask import Flask, request, jsonify, render_template_string
@@ -94,6 +95,13 @@ SUB_EXTS = (".srt", ".ass", ".vtt")
 
 ROOT_CHANNELS = APP_ROOT / "Channels"
 ROOT_CHANNELS.mkdir(exist_ok=True)
+
+def media_path(rel) -> Path:
+    """Return absolute path within the application root."""
+    p = Path(rel)
+    if not p.is_absolute():
+        p = APP_ROOT / p
+    return p.resolve()
 
 # Default data files (can be changed in settings)
 DEFAULT_CACHE_FILE = APP_ROOT / "durations.json"
@@ -3521,7 +3529,7 @@ class CursorController(QObject):
         self._send(Qt.Key_Escape)
 
 # ───────────── MAIN TV PLAYER CLASS - ENHANCED AND COMPLETE ─────────────
-class TVPlayer(QMainWindow):
+class TVPlayer(QMainWindow, MediaDiagnostics):
     DEFAULT_KEYS = {
         "next_video": "Ctrl+Right", "prev_video": "Ctrl+Left",
         "next_channel": "PageDown", "prev_channel": "PageUp",
@@ -3563,6 +3571,7 @@ class TVPlayer(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        MediaDiagnostics.__init__(self)
         self.setWindowTitle("[TV] Infinite Tv")
         # Load settings before building UI
         self.settings = self._load_settings()
@@ -3629,6 +3638,7 @@ class TVPlayer(QMainWindow):
         self.video = QVideoWidget()
         self.player.setVideoOutput(self.video)
         self.player.setVolume(self.settings["default_volume"])
+        self.init_media_diagnostics(self.player)
 
         # Enhanced playback state tracking
         self.playback_state = {
@@ -4369,9 +4379,23 @@ class TVPlayer(QMainWindow):
     def _continue_load_program(self, program_path: Path, seek_pos: int, segment_info: dict):
         """Continue loading program after stop completes."""
         try:
-            media_url = QUrl.fromLocalFile(str(program_path))
-            content = QMediaContent(media_url)
-            self.player.setMedia(content)
+            abs_path = media_path(program_path)
+            if not abs_path.exists():
+                sample = media_path('assets/sample.mp4')
+                if sample.exists():
+                    logging.warning(f"Missing media {abs_path}, using sample {sample}")
+                    abs_path = sample
+                else:
+                    msg = f"Missing media file: {abs_path}"
+                    logging.error(msg)
+                    self._osd(msg)
+                    return
+            media_url = QUrl.fromLocalFile(str(abs_path))
+            if hasattr(self.player, 'setSource'):
+                self.player.setSource(media_url)
+            else:
+                content = QMediaContent(media_url)
+                self.player.setMedia(content)
             
             # For ads with segment info, set up timer
             if segment_info and 'duration' in segment_info:
