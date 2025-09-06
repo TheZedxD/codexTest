@@ -17,6 +17,16 @@ On Linux install these via your package manager. On Windows download the
 latest releases from their official websites and check the option to add
 Python and Git to your system `PATH`.
 
+## Steam Deck Quick Start
+
+```bash
+./deck_repair.sh
+./run.sh    # or launch via desktop entry
+```
+
+This installs required Python packages and launches the player with sensible
+defaults for the Deck.
+
 ## Steam Deck (Desktop Mode)
 
 Prereqs: Python 3 (preinstalled), network, your media files.
@@ -144,6 +154,20 @@ bash install.sh     # or install.ps1 on Windows
 Your existing channel folders and configuration files will be preserved.
 
 ## Troubleshooting
+
+Basic GStreamer test:
+
+```bash
+gst-play-1.0 path/to/video.mp4
+```
+
+If that plays but the app does not, ensure Qt uses X11:
+
+```bash
+export QT_QPA_PLATFORM=xcb
+```
+
+Logs can be found in `logs/errors.log` and `logs/qtmultimedia.log`.
 
 Ensure Python 3 and pip are installed and available in your `PATH`. If the
 installers fail to download packages because your system lacks internet
