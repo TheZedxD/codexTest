@@ -10,7 +10,7 @@ if (-not $python) {
 }
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$venvPath = Join-Path $root 'venv'
+$venvPath = Join-Path $root '.venv'
 if (-not (Test-Path $venvPath)) {
     python -m venv $venvPath
 }

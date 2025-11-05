@@ -99,16 +99,32 @@ clips. Administrator permissions are not required.
 2. **Install the Python extension** – If prompted, allow VS Code to install the
    recommended extension which provides linting and debugging features.
 3. **Select the interpreter** – Press `Ctrl+Shift+P` and run `Python: Select
-   Interpreter`. Choose your Python 3 installation.
+   Interpreter`. Choose the `.venv` virtual environment created by the installer.
 4. **Install dependencies** – Open the integrated terminal (`Terminal → New
    Terminal`) and run the installer for your platform (`bash install.sh` on
    Linux or `powershell -ExecutionPolicy Bypass -File install.ps1` on Windows).
-5. **Run the program** – Use the terminal to execute `python tv.py` or press <kbd>F5</kbd> to start a debug session.
+5. **Run the program** – Use the terminal to execute `./run.sh` (Linux) or `.\run.ps1` (Windows), or press <kbd>F5</kbd> to start a debug session.
 
 ## Running Infinite Tv
 
-After installation launch the player with:
+After installation, launch the player using the provided run scripts:
 
+**Linux/macOS:**
+```bash
+./run.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\run.ps1
+```
+
+**Windows (Command Prompt):**
+```cmd
+run.bat
+```
+
+Or run directly with Python:
 ```bash
 python tv.py
 ```

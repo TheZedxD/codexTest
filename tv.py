@@ -68,11 +68,23 @@ from PyQt5.QtWidgets import (
     QGraphicsDropShadowEffect, QScrollArea, QSystemTrayIcon
 )
 from functools import partial
-from media_diagnostics import MediaDiagnostics
+
+# Local imports with fallback to add current directory to path
+try:
+    from media_diagnostics import MediaDiagnostics
+except ImportError:
+    sys.path.insert(0, str(APP_ROOT))
+    from media_diagnostics import MediaDiagnostics
 
 # Flask imports for web server
 from flask import Flask, request, jsonify, render_template_string
-from qr_code_dialog import QRCodeDialog
+
+try:
+    from qr_code_dialog import QRCodeDialog
+except ImportError:
+    sys.path.insert(0, str(APP_ROOT))
+    from qr_code_dialog import QRCodeDialog
+
 from werkzeug.serving import run_simple
 
 # FIXED: Remove duplicate imports and add missing ones

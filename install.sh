@@ -12,10 +12,10 @@ if ! command -v python3 >/dev/null; then
 fi
 
 # Create virtual environment
-if [ ! -d "venv" ]; then
-    python3 -m venv venv
+if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
 fi
-source venv/bin/activate
+source .venv/bin/activate
 
 # Install Python packages
 if [ -z "$SKIP_PIP" ]; then
@@ -34,9 +34,37 @@ fi
 if ! command -v ffprobe >/dev/null; then
     echo "ffmpeg/ffprobe not found. The program may use fallback durations."
     if command -v apt-get >/dev/null; then
-        read -p "Install ffmpeg using apt-get? [y/N]: " ans
+        read -p "Install ffmpeg and GStreamer plugins using apt-get? [y/N]: " ans
         if [[ "$ans" =~ ^[Yy]$ ]]; then
-            sudo apt-get install -y ffmpeg
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg \
+                gstreamer1.0-plugins-base \
+                gstreamer1.0-plugins-good \
+                gstreamer1.0-plugins-bad \
+                gstreamer1.0-plugins-ugly \
+                gstreamer1.0-libav \
+                gstreamer1.0-pulseaudio
+        fi
+    elif command -v pacman >/dev/null; then
+        read -p "Install ffmpeg and GStreamer plugins using pacman? [y/N]: " ans
+        if [[ "$ans" =~ ^[Yy]$ ]]; then
+            sudo pacman -Sy --needed ffmpeg \
+                gstreamer \
+                gst-plugins-base \
+                gst-plugins-good \
+                gst-plugins-bad \
+                gst-plugins-ugly \
+                gst-libav
+        fi
+    elif command -v dnf >/dev/null; then
+        read -p "Install ffmpeg and GStreamer plugins using dnf? [y/N]: " ans
+        if [[ "$ans" =~ ^[Yy]$ ]]; then
+            sudo dnf install -y ffmpeg \
+                gstreamer1-plugins-base \
+                gstreamer1-plugins-good \
+                gstreamer1-plugins-bad-free \
+                gstreamer1-plugins-ugly-free \
+                gstreamer1-libav
         fi
     fi
 fi
@@ -59,7 +87,7 @@ cat > "$DESKTOP_DIR/TVPlayer.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=TVPlayer
-Exec=$(pwd)/venv/bin/python "$(pwd)/tv.py"
+Exec=$(pwd)/.venv/bin/python "$(pwd)/tv.py"
 Path=$(pwd)
 Icon=$(pwd)/logo.png
 Terminal=false
@@ -69,6 +97,6 @@ chmod +x "$DESKTOP_DIR/TVPlayer.desktop"
 if [ "$pkg_ok" = true ]; then echo -e "${GREEN}[✓] Python packages installed${RESET}"; fi
 if [ "$dir_ok" = true ]; then echo -e "${GREEN}[✓] Folder structure created${RESET}"; fi
 if [ "$copy_ok" = true ]; then echo -e "${GREEN}[✓] Media setup complete${RESET}"; fi
-echo -e "${GREEN}[✓] Installation complete. Run with: $(pwd)/venv/bin/python 'tv.py'${RESET}"
+echo -e "${GREEN}[✓] Installation complete. Run with: $(pwd)/.venv/bin/python 'tv.py'${RESET}"
 echo "If you have a logo.png file in this directory it will be used for the"
 echo "system tray icon on supported desktops."
