@@ -1,8 +1,10 @@
 import sys
 from pathlib import Path
 
+# Add parent directory to path if needed
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from qr_utils import TMP_DIR, make_qr_png
 

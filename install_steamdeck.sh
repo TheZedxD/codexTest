@@ -8,8 +8,8 @@ if ! command -v python3 >/dev/null; then
 fi
 
 # 2) Create venv (idempotent) and upgrade installer tooling
-if [ ! -d "venv" ]; then python3 -m venv venv; fi
-source venv/bin/activate
+if [ ! -d ".venv" ]; then python3 -m venv .venv; fi
+source .venv/bin/activate
 python -m pip install -U pip wheel setuptools
 
 # 3) Install Python deps
@@ -54,9 +54,9 @@ cat > "$APPDIR/run.sh" <<'EOS'
 #!/usr/bin/env bash
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
-PY="$HERE/venv/bin/python"
+PY="$HERE/.venv/bin/python"
 if [ ! -x "$PY" ]; then
-  echo "venv Python not found. Run ./install_steamdeck.sh first."; exit 1
+  echo ".venv Python not found. Run ./install_steamdeck.sh first."; exit 1
 fi
 # Default to X11 on Desktop Mode; override as needed
 export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb}
